@@ -1,0 +1,83 @@
+<mxfile host="app.diagrams.net" agent="Claude">
+  <diagram id="novela-simple" name="Novela agéntica · simple">
+    <mxGraphModel dx="851" dy="556" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" background="#ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t" parent="1" style="text;html=1;align=center;fontSize=16;fontColor=#333333;" value="&lt;b&gt;Novela «El zurdo» · flujo agéntico mínimo&lt;/b&gt;" vertex="1">
+          <mxGeometry height="30" width="320" x="180" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="brief" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" value="Brief del autor&lt;br&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;boxeador zurdo, época actual&lt;/font&gt;" vertex="1">
+          <mxGeometry height="60" width="240" x="220" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="inv" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" value="1 · Agente Investigación&lt;br&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;técnica southpaw, circuito actual&lt;/font&gt;" vertex="1">
+          <mxGeometry height="60" width="240" x="220" y="170" as="geometry" />
+        </mxCell>
+        <mxCell id="esc" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" value="2 · Agente Redactor&lt;br&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;personajes y estructura por capítulos&lt;/font&gt;" vertex="1">
+          <mxGeometry height="60" width="240" x="220" y="270" as="geometry" />
+        </mxCell>
+        <mxCell id="wri" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" value="3 · Agente Escritor&lt;br&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;redacta el capítulo N&lt;/font&gt;" vertex="1">
+          <mxGeometry height="60" width="240" x="220" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="rev" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" value="4 · Agente Revisor&lt;br&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;continuidad, estilo y verosimilitud del combate&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="240" x="220" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="g1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" value="¿Capítulo&lt;br&gt;aprobado?" vertex="1">
+          <mxGeometry height="90" width="160" x="260" y="580" as="geometry" />
+        </mxCell>
+        <mxCell id="g2" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" value="¿Quedan&lt;br&gt;capítulos?" vertex="1">
+          <mxGeometry height="90" width="160" x="260" y="710" as="geometry" />
+        </mxCell>
+        <mxCell id="fin" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;" value="Manuscrito final" vertex="1">
+          <mxGeometry height="60" width="200" x="240" y="850" as="geometry" />
+        </mxCell>
+        <mxCell id="mem" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" value="&lt;b&gt;Memoria&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;biblia de personajes,&lt;br&gt;cronología y récord,&lt;br&gt;capítulos escritos&lt;/font&gt;" vertex="1">
+          <mxGeometry height="110" width="180" x="550" y="400" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="brief" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;strokeColor=#666666;" target="inv">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="inv" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;strokeColor=#666666;" target="esc">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="esc" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;strokeColor=#666666;" target="wri">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="wri" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;strokeColor=#666666;" target="rev">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="rev" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;strokeColor=#666666;" target="g1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="g1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0;exitY=0.5;entryX=0;entryY=0.5;strokeColor=#b85450;fontSize=10;" target="wri" value="No · reescribe">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="150" y="625" />
+              <mxPoint x="150" y="400" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="g1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;strokeColor=#82b366;fontSize=11;fontStyle=1;" target="g2" value="Sí">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="g2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;entryX=1;entryY=0.5;strokeColor=#b85450;fontSize=10;" target="wri" value="Sí · capítulo N+1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="500" y="755" />
+              <mxPoint x="500" y="400" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="g2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;strokeColor=#82b366;fontSize=11;fontStyle=1;" target="fin" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="rev" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;startArrow=classic;endArrow=classic;exitX=1;exitY=0.5;entryX=0;entryY=0.2;strokeColor=#997a00;fontSize=10;" target="mem" value="lee / escribe">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="esc" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;startArrow=classic;endArrow=classic;exitX=1;exitY=0.5;entryX=0;entryY=0.8;strokeColor=#997a00;" target="mem">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
