@@ -1,0 +1,30 @@
+{
+  "version": 3,
+  "config_version": 3,
+  "unidad": "lineas",
+  "capitulos": [
+    {
+      "n": 1,
+      "titulo": "Guardia invertida",
+      "objetivo": "Instalar la pérdida de la que arranca la novela: la zurda de Damián deja de ser su ventaja y pasa a ser un servicio que otros alquilan por horas y que ya hay quien presta más barato. Al terminar el capítulo, esperar sentado a que su mano le devuelva la carrera ha dejado de ser una estrategia posible, aunque él todavía no sepa qué pone en su lugar.",
+      "pov": "prota",
+      "conflicto": "Damián quiere la hora de sparring que daba por suya —la única vía que le queda a una cartelera— contra Nuria, que administra el ring por lo que le pagan de fuera y ha vendido esa hora a un mánager para preparar a un prospecto ortodoxo contra un zurdo, poniendo de zurdo a Yeray, veinte años, más barato y con más asaltos en el cuerpo. Problema dramático concreto: la rareza por la que Damián cobraba sigue valiendo dinero, pero ya no es suya; y no tiene un segundo argumento con el que pedir nada.",
+      "salida": "El gimnasio vacío, Damián frente al saco probando a golpear con la derecha adelantada y haciéndolo mal, con el hombro que no sabe adónde ir. El lector se queda con la pregunta sin responder: aprender a ganar de otra manera a los treinta y uno, o retirarse siendo el que era.",
+      "problema_tactico": null,
+      "acto": 1,
+      "contiene_combate": false,
+      "lineas_objetivo": 12,
+      "estado": "consolidado",
+      "iteraciones": 3,
+      "consolidado_en": {
+        "iteracion": 3,
+        "media": 4.2,
+        "bible_version": 1,
+        "ledger_version": 2,
+        "resumen": "Damian encuentra su hora de ring de los martes ocupada por Yeray Miralles, veinte anos y tambien zurdo, haciendo de sparring de angulo para el chico de un manager de fuera; pide entrar en alguna sesion suelta, no queda ninguna, y descubre que al chaval le pagan veinticinco euros la hora por lo que a el le pagaron cuarenta en marzo. Ofrece su record, catorce, tres y un nulo, y Nuria escribe el nombre del otro en las seis casillas de la pizarra. Con el gimnasio vacio se venda las manos y prueba a solas la guardia contraria en el saco: le sale mal y vuelve a colocarse."
+      },
+      "resumen": "Damian encuentra su hora de ring de los martes ocupada por Yeray Miralles, veinte anos y tambien zurdo, haciendo de sparring de angulo para el chico de un manager de fuera; pide entrar en alguna sesion suelta, no queda ninguna, y descubre que al chaval le pagan veinticinco euros la hora por lo que a el le pagaron cuarenta en marzo. Ofrece su record, catorce, tres y un nulo, y Nuria escribe el nombre del otro en las seis casillas de la pizarra. Con el gimnasio vacio se venda las manos y prueba a solas la guardia contraria en el saco: le sale mal y vuelve a colocarse."
+    }
+  ],
+  "actualizado": "2026-09-16T19:21:25+00:00"
+}

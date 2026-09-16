@@ -1,0 +1,104 @@
+{
+  "titulo_trabajo": "El zurdo",
+  "voz": {
+    "persona": "primera",
+    "tiempo": "pasado",
+    "muestra": "El gimnasio olía a lo de siempre, a vendas secas y a desagüe. Subí los tres pisos sin prisa, porque llegar pronto no me servía de nada: el ring estaba ocupado y yo ya sabía por quién. Dejé la bolsa en el banco de madera, me senté y me miré las manos un rato, como si fueran de otro. La licencia la había pagado en enero. Ciento y algo de euros. Era casi todo lo que el año me había pedido y casi todo lo que me había dado.",
+    "tics": [
+      "frases cortas justo después del golpe o de la mala noticia, sin comentario",
+      "no nombra el miedo ni la vergüenza: describe el cuerpo y deja el nombre fuera",
+      "mide las cosas en euros, en horas y en kilos, no en sentimientos",
+      "nunca dice mi zurda: dice la izquierda, esta mano, o esto",
+      "sabe cómo acabó el día y lo deja caer sin explicarlo, porque aún no lo entiende",
+      "nada de épica deportiva: ni música de fondo, ni discursos, ni sentencias"
+    ]
+  },
+  "temas": [
+    "identidad del que pelea al revés cuando la rareza deja de ser rareza",
+    "la ventaja heredada como excusa para no aprender nada más",
+    "coste físico y económico del oficio en la base del circuito",
+    "quedarse quieto esperando que algo te devuelva lo que crees que te debe"
+  ],
+  "personajes": [
+    {
+      "id": "prota",
+      "nombre": "Damián Olmo",
+      "rol": "protagonista",
+      "guardia": "zurda",
+      "categoria": "superligero",
+      "edad": 31,
+      "record_inicial": "14-3-1, 4 KO. Congelado en este capítulo: no hay combate oficial, así que el récord no se mueve (INV-04).",
+      "deseo": "que le devuelvan una fecha en una cartelera antes de que acabe la temporada, y que sea su izquierda la que se la consiga, como siempre",
+      "herida": "toda su carrera se ha explicado por la mano con la que nació y nunca se ha molestado en tener un segundo argumento; cree que la zurda le debe una carrera que no le llegó",
+      "voz": "habla poco y en cifras; contesta con preguntas prácticas (cuántas horas, cuánto pagan); no pide nada dos veces; nunca dice que tiene miedo ni que está acabado",
+      "arco": {
+        "acto_1": "Cree que su zurda le debe algo. En el gimnasio, en día de sparring, descubre que su rareza se ha convertido en un servicio que se alquila por horas y que hay uno más joven y más barato haciéndolo mejor. Acaba solo, probando a golpear con la derecha adelantada, y haciéndolo mal.",
+        "acto_2": "Proyección, no comprometida por la configuración vigente: aceptaría el trabajo de sparring de encargo por dinero mientras intenta, a escondidas, aprender a pelear de otra manera; cada avance le costaría lo que creía que era suyo por nacimiento.",
+        "acto_3": "Proyección: sabe que la izquierda no le debe nada y que depender de ella es exactamente lo que lo tiene parado. Elige sin garantía: aprender otra cosa o retirarse siendo el que era."
+      }
+    },
+    {
+      "id": "nuria",
+      "nombre": "Nuria Bastida",
+      "rol": "gestiona el gimnasio y vende las horas de ring",
+      "guardia": "no boxea",
+      "categoria": null,
+      "edad": 46,
+      "deseo": "cuadrar el mes: llenar las horas de ring que le pagan de fuera y no quedarse con nadie a deber",
+      "herida": "lleva dieciocho años sosteniendo un local que nunca ha dado dinero, y aprendió a no prometer nada",
+      "voz": "habla en horarios, en importes y en nombres de quien paga; no da consejos ni consuelo; no dice sentencias sobre el boxeo, dice cuánto cuesta la hora. Explícitamente no es la entrenadora sabia que veta el brief.",
+      "arco": {
+        "acto_1": "Le ha vendido a un mánager de fuera la hora de sparring que Damián daba por suya, y ha puesto de zurdo al chaval, porque cobra menos y aguanta más asaltos.",
+        "acto_2": "Proyección: le ofrece a Damián el mismo trabajo, pagado, sin disfrazarlo de oportunidad.",
+        "acto_3": "Proyección: sigue ahí, con el mismo local y la misma pizarra de horas; no se redime ni se hunde."
+      }
+    },
+    {
+      "id": "yeray",
+      "nombre": "Yeray Miralles",
+      "rol": "el otro zurdo, veinte años, ocupa el ring",
+      "guardia": "zurda",
+      "categoria": "ligero",
+      "edad": 20,
+      "deseo": "que lo vean y que le paguen; graba sus asaltos con el móvil apoyado en la cuerda",
+      "herida": "ninguna todavía, y eso es lo que a Damián le resulta insoportable",
+      "voz": "casual, sin respeto especial por la veteranía; trata la guardia zurda como un dato técnico, no como una identidad",
+      "arco": {
+        "acto_1": "Está haciendo, mejor y por menos dinero, el trabajo que Damián creía irrepetible: ser el zurdo contra el que un prospecto ortodoxo se prepara.",
+        "acto_2": "Proyección: se convierte en el espejo incómodo y, a ratos, en la única persona que le enseña algo a Damián sin dárselo como lección.",
+        "acto_3": "Proyección: sigue subiendo mientras Damián decide."
+      }
+    }
+  ],
+  "reglas_mundo": [
+    "La historia ocurre en el presente, con retransmision por streaming y patrocinio por redes.",
+    "No aparecen boxeadores reales en activo como personajes.",
+    "Toda la acción de este capítulo pasa en un gimnasio de barrio en día de sparring: tres pisos sin ascensor, un solo ring, pizarra con las horas, olor a desagüe.",
+    "Escala económica de base, no de cúspide: bolsas de varios cientos de euros en combates de cuatro a seis asaltos, licencia federativa del orden de cien euros al año, y nadie vive solo de pelear; se compagina con dar clases (research/03, research/06).",
+    "Aquí no hay rueda de prensa, ni careo, ni PPV, ni streaming propio: el aparato mediático del boxeo grande existe pero no toca a este gimnasio. Lo que hay es un móvil apoyado en la cuerda (research/06).",
+    "No hay cutman profesional ni médico: hielo, vaselina y quien lleve más años en el local (research/05).",
+    "El sparring duro se reserva para preparar un combate concreto; lo demás es técnico. Emparejar mal de peso o de nivel es cómo se lesiona la gente aquí (research/05).",
+    "En guardia cruzada la pelea se decide en el pie adelantado, no en el jab, que choca en el centro y sirve para medir; hoy se entrena específicamente contra zurdos, así que la sorpresa ya no se cotiza (research/01).",
+    "Cambiar de guardia no es un truco a voluntad: exige entrenamiento específico y no se sostiene un asalto entero (research/01).",
+    "El récord solo se mueve en capítulos con combate oficial. Este no lo tiene: 14-3-1 queda fijo (INV-04)."
+  ],
+  "consecuencias_zurda": [
+    "Fuera del ring: su carrera se ha vendido siempre como un inconveniente para el rival, no como un estilo; los mánagers lo llaman para lo que anula, no para lo que gana.",
+    "Fuera del ring: su zurda se ha convertido en un servicio por horas. Lo contratan para que un prospecto ortodoxo se acostumbre al ángulo, y en ese mercado el precio lo marca el zurdo más joven y más barato, no el mejor.",
+    "Fuera del ring: los rivales ortodoxos con futuro por delante evitan firmar con él porque un zurdo incómodo da un combate feo que no luce en vídeo; le quedan los que aceptan por dinero o los que se entrenan a su costa.",
+    "Fuera del ring: en las redes, un zurdo de base no tiene una historia que vender más allá de la rareza, y cuando la rareza deja de serlo tampoco tiene con qué buscar patrocinio (research/06).",
+    "En su cabeza: le atribuye a la mano un mérito que sería suyo, y por eso nunca aprendió una segunda forma de ganar. La zurda es su coartada, no solo su estilo.",
+    "En lo cotidiano: el gimnasio está montado para diestros —el saco colgado donde está, la máquina, el asiento del banco corrido— y él llevó treinta y un años acomodándose en silencio, hasta el punto de no notarlo ya (research/01, declarado allí como licencia narrativa)."
+  ],
+  "vetos": [
+    "Sin entrenador sabio que hable en sentencias.",
+    "Sin flashbacks al padre, ni a la infancia, ni a quién le enseñó a pelear.",
+    "Sin combate en este capítulo: ni pelea oficial, ni sparring propio del protagonista dentro del ring.",
+    "Sin nombres de boxeadores reales, ni en activo ni retirados, ni como referencia de pasada (INV-07).",
+    "Sin épica deportiva: sin música, sin discurso motivador, sin remontada, sin frase final que resuelva.",
+    "Sin que el récord se mueva (INV-04).",
+    "Sin marcadores de trabajo ni corchetes en el manuscrito."
+  ],
+  "version": 1,
+  "actualizado": "2026-09-16T18:56:21+00:00"
+}

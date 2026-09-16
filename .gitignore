@@ -1,0 +1,15 @@
+# Estado y entorno
+.env
+.chroma/
+__pycache__/
+*.pyc
+
+# Entregable: se compila desde manuscript/
+dist/*
+!dist/.gitkeep
+
+# Trazas de ejecucion
+logs/*.jsonl
+
+# Temporales de la escritura atomica
+memory/.*.tmp

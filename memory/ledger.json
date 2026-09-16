@@ -1,0 +1,40 @@
+{
+  "version": 2,
+  "record": {
+    "victorias": 0,
+    "derrotas": 0,
+    "empates": 0,
+    "ko": 0
+  },
+  "cronologia": [
+    {
+      "descripcion": "La hora de ring de los martes de 18:00 a 19:00 era de Damian desde febrero, sin nada escrito ni contrato. En marzo le pagaron cuarenta euros la hora por hacer de zurdo de encargo. El presente narrativo es posterior a marzo; el capitulo no fija el mes. La escena termina pasadas las 20:30 en el gimnasio vacio.",
+      "estado": "vigente",
+      "capitulos_afectados": [],
+      "capitulo": 1
+    }
+  ],
+  "combates": [],
+  "lesiones": [],
+  "hilos_abiertos": [
+    {
+      "id": "h01-martes-seis-sesiones",
+      "descripcion": "Un manager de fuera ha comprado y pagado por adelantado seis sesiones de la hora de ring de los martes (18:00-19:00) para que su chico, de guardia estandar, se prepare contra un zurdo. Nuria escribio el nombre de Yeray Miralles en las seis casillas de la pizarra y no queda ninguna sesion suelta: Damian la pidio y recibio un no. El hilo se cierra cuando se agoten o se reasignen esas seis sesiones, o cuando Damian recupere o pierda definitivamente ese martes.",
+      "abierto_en": 1,
+      "cerrar_antes_de": 2
+    },
+    {
+      "id": "h01-tarifa-sparring-encargo",
+      "descripcion": "El trabajo de hacer de zurdo de encargo sigue pagandose, pero ya no al precio de Damian: Yeray Miralles lo hace por veinticinco euros la hora frente a los cuarenta que a Damian le pagaron en marzo. Damian ofrecio su record (catorce, tres y un nulo) como argumento y Nuria no lo recogio. Queda pendiente si acepta ese trabajo al precio que ahora marca el mercado, lo rechaza o lo negocia; el hilo se cierra cuando Damian responda a una oferta concreta con importe.",
+      "abierto_en": 1,
+      "cerrar_antes_de": 2
+    },
+    {
+      "id": "h01-guardia-contraria",
+      "descripcion": "Damian ha empezado a entrenar a solas y sin testigos la guardia contraria: pie izquierdo delante, que es el que lleva detras desde siempre, y la derecha como mano atrasada. En el saco le sale mal (golpes cortos, sin cadera, empuja en vez de mover, el hombro a medio camino) y aun asi se recoloca y repite. Nadie en el gimnasio lo sabe. El hilo se cierra cuando la practica produzca un resultado utilizable, se haga publica o Damian la abandone.",
+      "abierto_en": 1,
+      "cerrar_antes_de": 3
+    }
+  ],
+  "actualizado": "2026-09-16T19:21:25+00:00"
+}

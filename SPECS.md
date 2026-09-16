@@ -1,6 +1,6 @@
 # SPECS · MyStiryMaker
 
-**Versión:** 2.1
+**Versión:** 2.2
 **Sistema:** escritura agéntica de una novela sobre un boxeador zurdo en la época actual.
 **Implementación:** harness sobre Claude Code.
 **Diagrama de referencia:** `docs/diagrama.drawio`
@@ -124,7 +124,7 @@ Las condiciones de salida de §4 a §8 no son recomendaciones en un prompt: son 
 | Hook | Momento | Comprueba |
 |---|---|---|
 | `validar_capitulos.py` | Al editar `config/capitulos.json` | Esquema, numeración, unidad y suma de extensión |
-| `validar_extension.py` | Al escribir en `manuscript/` | Recuento de líneas no vacías frente a `lineas_objetivo` (N3) |
+| `validar_extension.py` | Al escribir en `manuscript/` | Recuento de líneas no vacías frente a `lineas_objetivo` y reparto en párrafos (N3) |
 | `bloquear_memoria.py` | Antes de escribir en `memory/` | Que el emisor sea el orquestador (INV-09) |
 | `registrar_coste.py` | Al terminar cada subagente | Traza en `logs/run-*.jsonl` |
 
@@ -138,6 +138,11 @@ Regla de diseño: bloquear al final del paso, no a mitad de la edición. Un hook
 | `/novela capitulo N` | Ejecuta el ciclo de un capítulo |
 | `/novela continuar` | Ejecuta hasta agotar pendientes o escalar |
 | `claude -p "/novela continuar"` | Ejecución headless, para lotes largos o CI |
+| `python scripts/compilar.py` | Produce la novela entera sin sesión interactiva y cierra N5 |
+
+La última fila es el **lanzador**: `scripts/pipeline.py` abre una sesión headless por paso —N1 y N2 primero, luego el ciclo de cada capítulo— y `compilar.py` compila cuando no queda pendiente. El lanzador no orquesta: no puntúa, no escribe prosa y no toca `memory/`. Decide qué paso falta, lo lanza y comprueba el estado al volver; D1, el máximo de iteraciones y el orden estricto siguen donde estaban. Cada paso comprueba antes si su trabajo ya está hecho, así que una ejecución interrumpida continúa donde se quedó.
+
+Es una comodidad de operación, no un cambio de arquitectura: el orquestador sigue siendo la sesión de Claude Code, solo que quien la abre es un script en lugar de una persona.
 
 ---
 
@@ -173,7 +178,7 @@ Regla de diseño: bloquear al final del paso, no a mitad de la edición. Un hook
 
 **IN:** `outline.json[N]` + `bible.json` + resúmenes de capítulos anteriores + notas de revisión si es reescritura.
 **OUT:** `manuscript/cap-NN.md` + hechos duros declarados.
-**Condición de salida:** extensión exactamente igual a `lineas_objetivo` (la tolerancia vigente es cero), campo de hechos declarados presente aunque esté vacío, sin marcadores de trabajo.
+**Condición de salida:** extensión exactamente igual a `lineas_objetivo` (la tolerancia vigente es cero) y, si el capítulo declara estructura, reparto exacto en `parrafos_objetivo` párrafos de `lineas_por_parrafo` líneas; campo de hechos declarados presente aunque esté vacío; sin marcadores de trabajo.
 
 **Restricciones:** no introduce fechas, resultados, lesiones ni cambios de peso sin declararlos; no modifica la escaleta; recibe completos solo los dos capítulos anteriores, el resto como resumen.
 
@@ -222,6 +227,8 @@ Los capítulos se procesan en orden estricto. No hay paralelización en la versi
 **OUT:** `dist/manuscrito.md`.
 **Condición de salida:** sin hilos abiertos en el ledger, récord coherente con la suma de combates, sin marcadores de trabajo, 12 líneas totales, aprobación explícita del autor.
 
+El manuscrito conserva el reparto en párrafos con el que se escribió cada capítulo.
+
 ---
 
 ## 11. M1 · Memoria de ficheros
@@ -247,14 +254,14 @@ Los capítulos se procesan en orden estricto. No hay paralelización en la versi
 
 Este fichero es el único sitio donde se decide cuántos capítulos tiene la novela y cuánto mide cada uno. Es editable por el autor en cualquier momento, sujeto a las reglas de §12.3.
 
-**Configuración vigente: 3 capítulos de 4 líneas cada uno.** Es una configuración mínima: sirve para recorrer el circuito completo (N1 a N5, los dos bucles y la consolidación en memoria) en minutos y con coste despreciable, antes de lanzar una novela larga. Nada del resto del sistema cambia al ampliarla; solo este fichero.
+**Configuración vigente: 1 capítulo de 3 párrafos de 4 líneas cada uno (12 líneas).** Es una configuración mínima: sirve para recorrer el circuito completo (N1 a N5, el bucle de reescritura y la consolidación en memoria) en minutos y con coste despreciable, antes de lanzar una novela larga. Nada del resto del sistema cambia al ampliarla; solo este fichero.
 
 ### 12.1 Fichero
 
 ```json
 {
   "$schema": "./capitulos.schema.json",
-  "version": 2,
+  "version": 3,
   "titulo_trabajo": "El zurdo",
   "extension": {
     "unidad": "lineas",
@@ -264,21 +271,23 @@ Este fichero es el único sitio donde se decide cuántos capítulos tiene la nov
   },
   "defaults": {
     "pov": "prota",
-    "lineas_objetivo": 4
+    "lineas_objetivo": 12,
+    "parrafos_objetivo": 3,
+    "lineas_por_parrafo": 4
   },
   "capitulos": [
-    { "n": 1, "acto": 1, "titulo": "Guardia invertida", "lineas_objetivo": 4, "contiene_combate": false },
-    { "n": 2, "acto": 2, "titulo": "Otro zurdo",        "lineas_objetivo": 4, "contiene_combate": true  },
-    { "n": 3, "acto": 3, "titulo": "Después",           "lineas_objetivo": 4, "contiene_combate": false }
+    { "n": 1, "acto": 1, "titulo": "Guardia invertida", "lineas_objetivo": 12, "parrafos_objetivo": 3, "lineas_por_parrafo": 4, "contiene_combate": false }
   ]
 }
 ```
 
-**Total planificado:** 12 líneas en 3 capítulos, uno de ellos con combate. Un capítulo por acto.
+**Total planificado:** 12 líneas en 1 capítulo, sin combate, repartidas en 3 párrafos de 4 líneas.
 
-**Definición de línea:** línea no vacía del cuerpo del capítulo, separada por salto de línea, excluyendo el título. Cuatro líneas equivalen a cuatro párrafos de una frase cada uno.
+**Definición de línea:** línea no vacía del cuerpo del capítulo, separada por salto de línea, excluyendo el título.
 
-**Por qué la tolerancia es cero:** con extensiones de cuatro líneas, un margen porcentual no significa nada (el 15 % de 4 son 0,6 líneas). La comprobación de N3 pasa a ser igualdad exacta: cuatro líneas son cuatro, ni tres ni cinco. Si se vuelve a una extensión larga, hay que restaurar `tolerancia_capitulo_pct` y `tolerancia_total_pct` en lugar de los campos en líneas.
+**Definición de párrafo:** bloque de líneas consecutivas separado del siguiente por una línea en blanco. Cuando un capítulo declara `parrafos_objetivo`, no basta con que cuadre el total: el reparto tiene que ser exacto, y `parrafos_objetivo × lineas_por_parrafo` debe coincidir con `lineas_objetivo`. La estructura es opcional; si no se declara, solo se comprueba el total.
+
+**Por qué la tolerancia es cero:** con extensiones de doce líneas, un margen porcentual no significa gran cosa (el 15 % de 12 son 1,8 líneas) y deja de poderse comprobar el reparto en párrafos. La comprobación de N3 es igualdad exacta: doce líneas son doce, en tres bloques de cuatro. Si se vuelve a una extensión larga, hay que restaurar `tolerancia_capitulo_pct` y `tolerancia_total_pct` en lugar de los campos en líneas.
 
 ### 12.2 Campos
 
@@ -295,6 +304,8 @@ Este fichero es el único sitio donde se decide cuántos capítulos tiene la nov
 | `capitulos[].acto` | 1 \| 2 \| 3 | sí | Acto al que pertenece |
 | `capitulos[].titulo` | texto | no | Título provisional; N2 puede proponer otro |
 | `capitulos[].lineas_objetivo` | entero | no | Extensión objetivo; hereda de `defaults` |
+| `capitulos[].parrafos_objetivo` | entero | no | Número exacto de párrafos del capítulo; hereda de `defaults` |
+| `capitulos[].lineas_por_parrafo` | entero | no | Líneas exactas de cada párrafo; exige `parrafos_objetivo` |
 | `capitulos[].contiene_combate` | booleano | sí | Activa la verificación técnica en N4 |
 
 `estado` e `iteraciones` **no** viven aquí: son estado de producción y pertenecen a `outline.json`. Separarlos es lo que permite editar el plan sin pisar el progreso.
@@ -305,11 +316,11 @@ Este fichero es el único sitio donde se decide cuántos capítulos tiene la nov
 |---|---|
 | RM-01 | Añadir, eliminar o reordenar capítulos solo afecta a los que están en estado `pendiente` |
 | RM-02 | Modificar un capítulo ya consolidado no tiene efecto salvo que se marque explícitamente para reescritura |
-| RM-03 | Al guardar, un hook valida contra el esquema: `n` único y consecutivo, actos ordenados, suma dentro de la tolerancia total y coherencia entre `unidad` y los campos de extensión |
+| RM-03 | Al guardar, un hook valida contra el esquema: `n` único y consecutivo, actos ordenados, suma dentro de la tolerancia total, coherencia entre `unidad` y los campos de extensión, y que `parrafos_objetivo × lineas_por_parrafo` cuadre con `lineas_objetivo` |
 | RM-04 | Si cambia la numeración, el orquestador reindexa `outline.json` y `ledger.json`; los ficheros de `manuscript/` se renombran en el mismo commit |
 | RM-05 | Cada edición incrementa `version` y se registra en git con mensaje `config: …` |
 | RM-06 | Cambiar `contiene_combate` a `true` en un capítulo consolidado lo devuelve a `pendiente`: la verificación técnica de N4 no se ejecutó |
-| RM-07 | Cambiar la extensión objetivo de un capítulo consolidado lo devuelve a `pendiente` si la diferencia excede la tolerancia con la que se escribió |
+| RM-07 | Cambiar la extensión objetivo de un capítulo consolidado lo devuelve a `pendiente` si la diferencia excede la tolerancia con la que se escribió. Cambiar su reparto en párrafos lo devuelve a `pendiente` sin más: la forma no se puede reparar sin reescribir |
 | RM-08 | Cambiar `extension.unidad` invalida todo el plan: todos los capítulos vuelven a `pendiente` |
 
 ### 12.4 Efecto de una edición a mitad de producción
@@ -352,6 +363,7 @@ Este fichero es el único sitio donde se decide cuántos capítulos tiene la nov
 | D1 | RN-01 a RN-03, CU-07 | Lógica del orquestador |
 | D2 | CU-08 | Lógica del orquestador |
 | N5 | CU-08 | `scripts/compilar.py` |
+| Lanzador | — | `scripts/pipeline.py` |
 | M1 | RN-04, RN-06, RN-07 | `memory/`, hooks de `.claude/settings.json` |
 | §12 | RN-09 | `config/capitulos.json` + `validar_capitulos.py` |
 

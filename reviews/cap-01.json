@@ -1,0 +1,114 @@
+{
+  "capitulo": 1,
+  "iteracion": 3,
+  "puntuaciones": {
+    "tension": 4,
+    "verosimilitud_tecnica": 4,
+    "avance_arco": 4,
+    "prosa": 4,
+    "continuidad": 5
+  },
+  "media": 4.2,
+  "veredicto": "aprobado",
+  "verificacion_combate": {
+    "guardia_coherente": null,
+    "pie_adelantado": null,
+    "clinch": null,
+    "esquina": null,
+    "tarjetas": null,
+    "observaciones": "contiene_combate es false en config/capitulos.json y en outline: no procede la verificacion de los cinco puntos. Veto respetado: el protagonista no pelea ni hace sparring dentro del ring; el trabajo del tercer parrafo es en saco, fuera del ring y con el gimnasio vacio. El sparring de Yeray solo se observa desde la puerta, en una linea, sin volverse escena de combate. Extension: cumple exacta, 12 lineas no vacias de cuerpo en 3 parrafos de 4 (lineas 3-6, 8-11, 13-16; el titulo no cuenta). Sin corchetes, sin marcadores de trabajo, sin alternativas. Los tres parrafos son tres movimientos distintos, como pide la nota del brief: hallazgo en la puerta / transaccion con Nuria / gimnasio vacio. INV-04: el record se enuncia (14-3-1) pero no se mueve, y no hay combate. INV-07: no aparece ningun boxeador real. INV-08: cumplido fuera del ring, la zurda es un servicio alquilado por horas con competencia mas barata, no solo un recurso tecnico. Aviso de escaleta: outline.salida y bible.arco.acto_1 dicen 'derecha adelantada'; el capitulo nombra el cambio por el pie izquierdo delante con la derecha como mano atrasada, que es lo tecnicamente correcto para un zurdo segun research/01. La escaleta no se ha tocado (INV-03) y no se penaliza el texto por apartarse de esa formulacion ambigua."
+  },
+  "notas": [
+    {
+      "severidad": "media",
+      "ubicacion": "linea 6 ('Sacaba el pie derecho por fuera del pie izquierdo del otro y los dos jabs se chocaban en el centro sin hacer nada')",
+      "problema": "Las dos mitades de la frase describen dos fases distintas del cruce y se presentan como simultaneas. Segun research/01, los jabs chocan en el centro y no hacen nada mientras nadie ha ganado el pie adelantado; si Yeray ya saca el pie derecho por fuera, tiene el angulo y el intercambio deja de ser neutro. Tal como esta, un entrenador leeria que el zurdo gana la posicion y no la aprovecha.",
+      "sugerencia": "Marcar el orden o el intento: por ejemplo 'Buscaba el pie derecho por fuera del pie izquierdo del otro y todavia no lo tenia: los dos jabs se chocaban en el centro sin hacer nada'. Con 'buscaba' o 'todavia no' la neutralidad del jab queda justificada y el duelo de pie adelantado se ve como pelea, no como resultado."
+    },
+    {
+      "severidad": "media",
+      "ubicacion": "parrafo 2, lineas 8-11 (Nuria no habla en ningun momento)",
+      "problema": "El conflicto de la ficha se libra contra Nuria, pero ella no tiene una sola linea de voz propia: informa en estilo indirecto (linea 8), la negativa llega resumida por el narrador (linea 10) y su unico acto es escribir en la pizarra (linea 11). La escena funciona, pero el rechazo se recibe como dato y no como algo que alguien le dice a la cara, y eso rebaja la friccion del unico enfrentamiento del capitulo.",
+      "sugerencia": "Convertir media linea de la 10 en voz de Nuria, en su registro de importes y horarios y sin consejo ni consuelo (voz de bible: 'habla en horarios, en importes y en nombres de quien paga'). Bastaria un fragmento entre comillas con la cifra de Yeray, dejando el resto de la linea como esta, para que la negativa la pronuncie ella y no el narrador."
+    },
+    {
+      "severidad": "baja",
+      "ubicacion": "linea 4 ('Subi los tres pisos y desde la puerta vi que dentro habia dos trabajando y que uno de los dos se ponia como yo')",
+      "problema": "Frase con dos subordinadas de 'que' encadenadas y repeticion de 'dos' ('habia dos' / 'uno de los dos'). Es la linea mas floja del capitulo justo donde cae el hallazgo, y el ritmo seco de la voz se diluye.",
+      "sugerencia": "Partirla en dos y quitar la repeticion: 'Subi los tres pisos. Desde la puerta vi que dentro habia dos trabajando y que uno se ponia como yo.' El hallazgo cae solo, al final, sin nada detras."
+    },
+    {
+      "severidad": "baja",
+      "ubicacion": "linea 5 ('Era Yeray Miralles, veinte anos, y su movil grababa apoyado en la cuerda de arriba')",
+      "problema": "La 'y' cose dos datos sin relacion entre si (identificacion y movil) y deja la frase con aire de inventario. El detalle del movil es bueno y merece su propia unidad.",
+      "sugerencia": "Sustituir la conjuncion por un punto: 'Era Yeray Miralles, veinte anos. Su movil grababa apoyado en la cuerda de arriba.'"
+    },
+    {
+      "severidad": "baja",
+      "ubicacion": "linea 14 ('el pie que llevo detras desde siempre')",
+      "problema": "Dentro de una narracion en pasado, el presente 'llevo' es legitimo como habitual, pero es el unico presente del capitulo y llama la atencion en una voz que el brief define como contada desde poco despues.",
+      "sugerencia": "Valorar 'el pie que habia llevado detras toda la vida' si se quiere uniformar el tiempo; si se conserva el presente, que sea decision consciente y no se repita en el capitulo 2."
+    },
+    {
+      "severidad": "baja",
+      "ubicacion": "capitulo completo (consecuencias de la zurda)",
+      "problema": "INV-08 se cumple solo por la via economica: la zurda como servicio por horas y competencia mas barata. La friccion cotidiana que recoge bible.consecuencias_zurda y research/01 (el gimnasio montado para diestros: el saco donde esta colgado, el banco corrido, la maquina) no aparece, y el tercer parrafo pasa justo al lado del saco sin tocarla.",
+      "sugerencia": "No es exigible en doce lineas y no bloquea este capitulo, pero conviene reservar ese material para el capitulo 2, donde el arco pide que aprender otra cosa le cueste lo que creia suyo por nacimiento."
+    }
+  ],
+  "hechos_nuevos": [
+    {
+      "tipo": "cronologia",
+      "descripcion": "La hora de ring de los martes de 18:00 a 19:00 era de Damian desde febrero, sin nada escrito ni contrato. En marzo le pagaron cuarenta euros la hora por hacer de zurdo de encargo. El presente narrativo es posterior a marzo; el capitulo no fija el mes. La escena termina pasadas las 20:30 en el gimnasio vacio.",
+      "estado": "vigente",
+      "capitulos_afectados": []
+    },
+    {
+      "tipo": "hilo_abierto",
+      "id": "h01-martes-seis-sesiones",
+      "descripcion": "Un manager de fuera ha comprado y pagado por adelantado seis sesiones de la hora de ring de los martes (18:00-19:00) para que su chico, de guardia estandar, se prepare contra un zurdo. Nuria escribio el nombre de Yeray Miralles en las seis casillas de la pizarra y no queda ninguna sesion suelta: Damian la pidio y recibio un no. El hilo se cierra cuando se agoten o se reasignen esas seis sesiones, o cuando Damian recupere o pierda definitivamente ese martes.",
+      "cerrar_antes_de": 2
+    },
+    {
+      "tipo": "hilo_abierto",
+      "id": "h01-tarifa-sparring-encargo",
+      "descripcion": "El trabajo de hacer de zurdo de encargo sigue pagandose, pero ya no al precio de Damian: Yeray Miralles lo hace por veinticinco euros la hora frente a los cuarenta que a Damian le pagaron en marzo. Damian ofrecio su record (catorce, tres y un nulo) como argumento y Nuria no lo recogio. Queda pendiente si acepta ese trabajo al precio que ahora marca el mercado, lo rechaza o lo negocia; el hilo se cierra cuando Damian responda a una oferta concreta con importe.",
+      "cerrar_antes_de": 2
+    },
+    {
+      "tipo": "hilo_abierto",
+      "id": "h01-guardia-contraria",
+      "descripcion": "Damian ha empezado a entrenar a solas y sin testigos la guardia contraria: pie izquierdo delante, que es el que lleva detras desde siempre, y la derecha como mano atrasada. En el saco le sale mal (golpes cortos, sin cadera, empuja en vez de mover, el hombro a medio camino) y aun asi se recoloca y repite. Nadie en el gimnasio lo sabe. El hilo se cierra cuando la practica produzca un resultado utilizable, se haga publica o Damian la abandone.",
+      "cerrar_antes_de": 3
+    }
+  ],
+  "fuera_de_ledger": [
+    {
+      "dato": "record_linea_base",
+      "descripcion": "Record de Damian Olmo: 14-3-1, 4 KO, declarado en el texto como 'catorce, tres y un nulo' (linea 11) y coincidente con bible.personajes[prota].record_inicial.",
+      "motivo": "No cabe en ninguno de los cinco tipos del consolidador. No es un 'combate': el capitulo no tiene combate oficial y declararlo como tal seria descartado por INV-04. Ademas el consolidador recalcula ledger.record desde cero sobre ledger.combates, asi que el record del ledger debe seguir en 0-0-0 mientras no haya combates registrados: eso no es una contradiccion, es lo que hace pasar la verificacion de N5 (suma del record == numero de combates). La linea base vive en la biblia, no en el ledger."
+    },
+    {
+      "dato": "escala_economica_del_local",
+      "descripcion": "Tarifa vigente del sparring de encargo en este gimnasio: veinticinco euros la hora lo que cobra el zurdo mas joven, cuarenta lo que se pago a Damian en marzo.",
+      "motivo": "Como regla de mundo permanente pertenece a bible.reglas_mundo (escala economica de base), no al ledger, que guarda hechos datables y hilos. Las dos cifras quedan de todos modos dentro de la descripcion del hilo 'h01-tarifa-sparring-encargo' para que el escritor del capitulo siguiente las vea sin abrir la biblia."
+    },
+    {
+      "dato": "detalles_de_personaje",
+      "descripcion": "Yeray Miralles graba sus asaltos con el movil apoyado en la cuerda de arriba. Nuria Bastida lleva la contabilidad y la pizarra de horas detras del mostrador y sabe de memoria lo que esta vendido.",
+      "motivo": "Confirman lo que ya declara bible.personajes; son rasgos, no hechos duros ni hilos pendientes. Forzarlos como hilo_abierto ensuciaria la verificacion de N5, que marca como problema todo hilo sin cerrar."
+    },
+    {
+      "dato": "estado_interno_del_arco",
+      "descripcion": "Damian termina el capitulo sin un segundo argumento con el que pedir nada: esperar sentado a que su izquierda le devuelva una fecha ha dejado de ser una estrategia posible, y todavia no sabe que pone en su lugar.",
+      "motivo": "Es el objetivo del capitulo cumplido, no un hecho datable. La parte accionable de este arco ya esta en el ledger como el hilo 'h01-guardia-contraria'; el resto es material de biblia y del resumen de consolidacion."
+    },
+    {
+      "dato": "aviso_para_N5",
+      "descripcion": "Con la configuracion vigente de un solo capitulo, compilar.py listara los tres hilos abiertos como problema en la verificacion.",
+      "motivo": "Es el comportamiento correcto y no debe resolverse cerrando hilos a mano: el capitulo 1 es acto 1 y la ficha pide explicitamente que la pregunta quede sin responder. Si el autor amplia config/capitulos.json, los cerrar_antes_de (2, 2 y 3) apuntan a donde deben recogerse."
+    }
+  ],
+  "contradicciones": [],
+  "resumen": "Damian encuentra su hora de ring de los martes ocupada por Yeray Miralles, veinte anos y tambien zurdo, haciendo de sparring de angulo para el chico de un manager de fuera; pide entrar en alguna sesion suelta, no queda ninguna, y descubre que al chaval le pagan veinticinco euros la hora por lo que a el le pagaron cuarenta en marzo. Ofrece su record, catorce, tres y un nulo, y Nuria escribe el nombre del otro en las seis casillas de la pizarra. Con el gimnasio vacio se venda las manos y prueba a solas la guardia contraria en el saco: le sale mal y vuelve a colocarse."
+}
