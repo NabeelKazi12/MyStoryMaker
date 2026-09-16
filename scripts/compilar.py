@@ -86,11 +86,30 @@ def verificar() -> tuple[list[str], list[str], dict]:
             f"(tolerancia {tolerancia})."
         )
 
-    hilos = ledger.get("hilos_abiertos") or []
-    if hilos:
+    # Hilos abiertos. Un hilo incumple la condicion de salida cuando debia haberse
+    # cerrado dentro del plan: su 'cerrar_antes_de' cae en un capitulo que existe, o
+    # no declara plazo y por tanto vence al final. Un hilo que vence en un capitulo
+    # que el plan no llega a tener no es un fallo del manuscrito sino una consecuencia
+    # de donde el autor ha puesto el limite, y se avisa sin bloquear.
+    ultimo = max((c["n"] for c in config["capitulos"]), default=0)
+    vencidos, fuera_de_plan = [], []
+    for hilo in ledger.get("hilos_abiertos") or []:
+        plazo = hilo.get("cerrar_antes_de")
+        (fuera_de_plan if isinstance(plazo, int) and plazo > ultimo else vencidos).append(hilo)
+
+    def describir(hilos: list) -> str:
+        return ", ".join(f"{h.get('id')} ({h.get('descripcion', '')[:40]})" for h in hilos)
+
+    if vencidos:
         problemas.append(
-            "hilos abiertos en el ledger: " + ", ".join(
-                f"{h.get('id')} ({h.get('descripcion', '')[:40]})" for h in hilos)
+            "hilos que el plan tenia que cerrar y siguen abiertos: " + describir(vencidos)
+        )
+    if fuera_de_plan:
+        avisos.append(
+            f"{len(fuera_de_plan)} hilos quedan abiertos porque vencian despues del capitulo "
+            f"{ultimo}, que es el ultimo del plan: {describir(fuera_de_plan)}. "
+            "El manuscrito se cierra con ellos pendientes; si no es lo que quieres, amplia "
+            "config/capitulos.json o pide que se cierren en el capitulo final."
         )
 
     record = ledger.get("record") or {}

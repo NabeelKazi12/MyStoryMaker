@@ -149,3 +149,22 @@ En `hechos_nuevos` van los hechos duros que el capítulo introduce y que deben
 entrar en el ledger, ya vengan declarados por el escritor o los hayas encontrado
 tú leyendo. En `contradicciones`, los que chocan con el ledger: esos no se
 consolidan, se corrigen.
+
+**El ledger solo admite cinco tipos**, y `consolidar.py` descarta cualquier otro:
+
+| `tipo` | Para qué | Campos |
+|---|---|---|
+| `combate` | Un combate oficial | `rival`, `guardia_rival`, `peso_kg`, `asaltos`, `resultado_prota`, `via` |
+| `lesion` | Daño con consecuencias posteriores | `descripcion`, `estado`, `capitulos_afectados` |
+| `cronologia` | Algo fechado en la ficción | `fecha_ficcion`, `evento`, `resultado` |
+| `hilo_abierto` | Una promesa narrativa pendiente | `id`, `descripcion`, `cerrar_antes_de` |
+| `hilo_cerrado` | Se salda un hilo anterior | `id` |
+
+No inventes tipos como `record`, `personaje`, `economia` o `arco`. El récord no
+es un hecho que se declare: se **deriva** de los combates del ledger (INV-04), y
+declararlo aparte lo descuadraría. Lo que no encaje en estos cinco tipos y aun así
+importe, va en `notas`, no en `hechos_nuevos`.
+
+En `cerrar_antes_de` pon el capítulo en el que el hilo tiene que estar saldado. Si
+el plan no llega hasta ahí, el manuscrito se cerrará con ese hilo pendiente y N5
+lo advertirá: piensa si el hilo cabe en la novela que el autor ha planificado.
