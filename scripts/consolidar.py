@@ -21,21 +21,24 @@ Subcomandos
     sincronizar                  Aplica a outline.json un cambio de config (12.4)
     marcar N ESTADO              Cambia el estado de produccion de un capitulo
     capitulo N --iteracion K     Consolida el capitulo N aprobado por D1
+    reiniciar --confirmar T      Vacia la novela entera para empezar otra
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
+import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import langfuse_cliente as lf
-from _comun import (BIBLE, CONFIG, ESTADOS, LEDGER, LOGS, MANUSCRITO, MARCADORES, MAX_ITER,
-                    MEMORIA, OUTLINE, REVIEWS, contar_lineas, contar_palabras,
-                    escribir_json_atomico, estructura_de, leer_json, objetivo_de,
-                    parrafos_capitulo)
+from _comun import (BIBLE, CONFIG, DIST, ESTADOS, ITERACIONES, LEDGER, LOGS, MANUSCRITO,
+                    MARCADORES, MAX_ITER, MEMORIA, OUTLINE, RAIZ, RESEARCH, REVIEWS,
+                    contar_lineas, contar_palabras, escribir_json_atomico, estructura_de,
+                    leer_json, objetivo_de, parrafos_capitulo)
 
 VICTORIA, DERROTA, EMPATE = "victoria", "derrota", "empate"
 
@@ -637,6 +640,69 @@ def cmd_capitulo(args: argparse.Namespace) -> int:
     return 0
 
 
+REINICIO_AUTORIZADO = "MSM_REINICIO_AUTORIZADO"
+
+
+def cmd_reiniciar(args: argparse.Namespace) -> int:
+    """Vacia la novela entera -memoria y todo lo producido- para empezar otra.
+
+    Es el unico comando destructivo del harness y pide dos llaves que ningun
+    agente tiene motivo para tener. La primera es el titulo de trabajo vigente
+    escrito a mano: nadie lo teclea por accidente. La segunda es la variable de
+    entorno MSM_REINICIO_AUTORIZADO, que pone el panel al invocarlo o el autor en
+    su terminal, y que las sesiones headless no heredan. Los subagentes no
+    ejecutan Bash, pero el orquestador si, y este script es precisamente la via
+    que tiene autorizada para escribir en memory/: la guarda tiene que estar en la
+    topologia y no en el prompt (INV-09).
+
+    Se lleva tambien `research/`. No es celo: `pipeline.hay_investigacion()` da N1
+    por hecho en cuanto hay seis ficheros ahi, asi que dejarlos sembraria la
+    novela nueva con el material factual de la anterior y el fallo no se veria
+    hasta leer un capitulo que habla de lo que no es.
+
+    No hay deshacer, y no lo hay a proposito: la copia de la novela anterior es su
+    historial de commits, que es donde SPECS pone la auditoria. Por eso el panel
+    se niega a llamar aqui con cambios sin commitear.
+    """
+    if os.environ.get(REINICIO_AUTORIZADO) != "1":
+        fallo(f"reiniciar borra la novela entera y exige autorizacion explicita del autor. "
+              f"Desde el panel se pone sola; desde una terminal, con "
+              f"{REINICIO_AUTORIZADO}=1 delante de la orden.")
+
+    config = cargar(CONFIG, {})
+    titulo = str(config.get("titulo_trabajo", "")).strip()
+    if not titulo:
+        fallo("config/capitulos.json no declara 'titulo_trabajo': no hay titulo que confirmar "
+              "ni, probablemente, novela que reiniciar.")
+    if args.confirmar.strip() != titulo:
+        fallo(f"la confirmacion no coincide con el titulo vigente. Escribe exactamente "
+              f"'{titulo}' en --confirmar si de verdad quieres vaciar la novela.")
+
+    borrados: list[str] = []
+
+    def quitar(ruta: Path) -> None:
+        if ruta.is_file():
+            ruta.unlink()
+            borrados.append(str(ruta.relative_to(RAIZ)).replace("\\", "/"))
+
+    for ruta in (BIBLE, OUTLINE, LEDGER):
+        quitar(ruta)
+    for carpeta, patron in ((MANUSCRITO, "cap-*.md"), (REVIEWS, "cap-*.json"),
+                            (RESEARCH, "*.md")):
+        for ruta in sorted(carpeta.glob(patron)):
+            quitar(ruta)
+    quitar(DIST / "manuscrito.md")
+    if ITERACIONES.is_dir():
+        shutil.rmtree(ITERACIONES, ignore_errors=True)
+        borrados.append(".iteraciones/")
+
+    print(f"Novela «{titulo}» vaciada: {len(borrados)} elementos borrados.")
+    for nombre in borrados:
+        print(f"  - {nombre}")
+    print("memory/ queda vacio. El siguiente paso es N1 y N2 con el brief nuevo.")
+    return 0
+
+
 def main() -> int:
     MEMORIA.mkdir(parents=True, exist_ok=True)
     parser = argparse.ArgumentParser(description="Escritura en la memoria de MyStoryMaker")
@@ -672,6 +738,11 @@ def main() -> int:
     p.add_argument("--iteracion", type=int)
     p.add_argument("--resumen", help="Resumen de una o dos frases para los capitulos siguientes")
     p.set_defaults(func=cmd_capitulo)
+
+    p = sub.add_parser("reiniciar")
+    p.add_argument("--confirmar", required=True,
+                   help="Titulo de trabajo vigente, escrito tal cual. Sin el no se borra nada.")
+    p.set_defaults(func=cmd_reiniciar)
 
     args = parser.parse_args()
     return args.func(args)

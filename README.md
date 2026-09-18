@@ -55,6 +55,15 @@ nuevo sin tocar los consolidados. Y **«Leer la novela»** abre lo consolidado
 seguido, con tipografía de libro, sangría francesa y cuerpo ajustable; no espera
 a que N5 compile, porque leer lo que hay es útil mucho antes de eso.
 
+La pestaña **«Nueva novela»** arranca otra desde cero: el giro, cuántos capítulos
+y de cuántos párrafos de cuántas líneas. Con eso escribe `brief.md` y
+`config/capitulos.json` y deja la memoria vacía. Lo que no le des —tono, persona
+narrativa, arco, vetos— sale como hueco en el brief y el panel lo marca como
+incompleto hasta que lo rellenes: el sistema no inventa el tono de una novela.
+Vaciar es destructivo y no hay deshacer, así que pide la frase de confirmación
+entera y se niega si queda algo sin commitear, porque el historial de git es la
+única copia de la novela anterior.
+
 ```
 pip install -r requirements.txt
 python ui/server.py

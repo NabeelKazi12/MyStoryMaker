@@ -20,6 +20,8 @@ El contrato sigue siendo [`SPECS.md`](../SPECS.md).
 
 python scripts/consolidar.py estado --json   estado completo en una línea
 python scripts/consolidar.py estado          lo mismo, legible para humanos
+MSM_REINICIO_AUTORIZADO=1 python scripts/consolidar.py reiniciar --confirmar "El zurdo"
+                                             vacía la novela entera para empezar otra
 python scripts/contexto.py N --para escritor|revisor|reparacion
 python scripts/compilar.py                   produce la novela entera y compila
 python scripts/compilar.py --solo-compilar   compila lo ya consolidado

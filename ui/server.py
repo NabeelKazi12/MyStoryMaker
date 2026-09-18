@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -37,7 +38,7 @@ import pipeline  # noqa: E402
 import resumen_langfuse  # noqa: E402
 import validar_capitulos  # noqa: E402
 from _comun import (BIBLE, CONFIG, ITERACIONES, LEDGER, MANUSCRITO, OUTLINE,  # noqa: E402
-                    REVIEWS,
+                    RESEARCH, REVIEWS,
                     escribir_json_atomico, leer_json, parrafos_capitulo)
 
 from fastapi import FastAPI, HTTPException  # noqa: E402
@@ -188,10 +189,11 @@ def exigir_libre() -> None:
         )
 
 
-def ejecutar_consolidar(*args: str) -> tuple[bool, str]:
+def ejecutar_consolidar(*args: str, entorno: dict | None = None) -> tuple[bool, str]:
     proceso = subprocess.run(
         [sys.executable, str(RAIZ / "scripts" / "consolidar.py"), *args],
         cwd=str(RAIZ), capture_output=True, text=True, encoding="utf-8", errors="replace",
+        env={**os.environ, **entorno} if entorno else None,
     )
     salida = ((proceso.stdout or "") + (proceso.stderr or "")).strip()
     return proceso.returncode == 0, salida
@@ -608,6 +610,235 @@ def api_capitulo_ficha(n: int) -> dict:
 
     job = lanzar_job("nuevo_capitulo", {"n": n, "solo_ficha": True}, tarea)
     return {"job_id": job.id}
+
+
+# --------------------------------------------------------------------------- novela nueva
+
+# Vaciar la novela borra trabajo que costo horas de agente, asi que se pide la
+# frase entera y no un «estas seguro»: escribirla es un acto deliberado, y un
+# doble clic en el sitio equivocado no la produce.
+FRASE_REINICIO = "EMPEZAR DE CERO"
+
+# Lo que es la novela a efectos de «se pierde si la vacias». `logs/` y
+# `.iteraciones/` no entran: uno es historial de ejecucion y el otro material
+# derivado que no reconstruye nada.
+RUTAS_NOVELA = ("brief.md", "config/capitulos.json", "memory", "manuscript", "reviews",
+                "research", "dist")
+
+
+def cambios_sin_commitear() -> list[str] | None:
+    """Lo que se perderia para siempre al vaciar la novela. None = no se ha podido saber.
+
+    La copia de seguridad de la novela anterior es su historial de commits: eso lo
+    decide SPECS, no esta pantalla. De ahi que lo unico que haya que mirar antes
+    de borrar sea si queda algo fuera de ese historial.
+    """
+    try:
+        proceso = subprocess.run(
+            ["git", "status", "--porcelain", "--", *RUTAS_NOVELA],
+            cwd=str(RAIZ), capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None                    # sin git, o sin repositorio: no se puede afirmar nada
+    if proceso.returncode != 0:
+        return None
+    return [linea.strip() for linea in proceso.stdout.splitlines() if linea.strip()]
+
+
+@app.get("/api/novela/reemplazo")
+def api_novela_reemplazo() -> dict:
+    """Que hay ahora mismo, para poder decir en la pantalla que es exactamente lo que se borra."""
+    config = leer_json(CONFIG) if CONFIG.exists() else {}
+    capitulos = construir_capitulos()
+    sin_commitear = cambios_sin_commitear()
+    return {
+        "titulo": config.get("titulo_trabajo", ""),
+        "capitulos": len(capitulos),
+        "consolidados": len([c for c in capitulos if c["estado"] == "consolidado"]),
+        "manuscritos": len(list(MANUSCRITO.glob("cap-*.md"))),
+        "research": len(list(RESEARCH.glob("*.md"))),
+        "compilado": (RAIZ / "dist" / "manuscrito.md").exists(),
+        "git": {"comprobable": sin_commitear is not None, "sin_commitear": sin_commitear or []},
+        "frase": FRASE_REINICIO,
+    }
+
+
+class NuevaNovelaBody(BaseModel):
+    """El arranque de una novela, tal como lo declara el autor.
+
+    El giro y la forma son obligatorios porque son suyos. Las otras cuatro
+    secciones del brief son opcionales *aqui*, no en el sistema: si se dejan en
+    blanco el brief nace incompleto y el panel lo dira hasta que se rellenen.
+    Preferible a que esta pantalla se invente el tono o los vetos de una novela.
+    """
+    titulo: str
+    giro: str
+    capitulos: int
+    parrafos_por_capitulo: int
+    lineas_por_parrafo: int
+    tono: str = ""
+    persona: str = ""
+    arco: str = ""
+    vetos: str = ""
+    confirmacion: str = ""
+    forzar: bool = False
+
+
+# Topes de cordura, no de diseno: un 300 en el campo equivocado planta un plan de
+# cientos de capitulos que nadie queria y que luego hay que deshacer a mano.
+MAX_CAPITULOS = 200
+MAX_PARRAFOS = 100
+MAX_LINEAS_PARRAFO = 100
+
+
+def plan_nuevo(body: NuevaNovelaBody) -> dict:
+    """El `config/capitulos.json` de la novela nueva: la misma forma en todos los capitulos.
+
+    Todos nacen en el acto 1 y sin combate. No es una decision narrativa
+    disfrazada: el esquema exige `acto` y `contiene_combate`, mientras que el
+    reparto real en tres actos y donde cae cada combate es del autor. Plantar aqui
+    una curva de tres actos inventada seria apropiarse de lo que §12 le reserva.
+    """
+    lineas_capitulo = body.parrafos_por_capitulo * body.lineas_por_parrafo
+    forma = {
+        "lineas_objetivo": lineas_capitulo,
+        "parrafos_objetivo": body.parrafos_por_capitulo,
+        "lineas_por_parrafo": body.lineas_por_parrafo,
+    }
+    return {
+        "$schema": "./capitulos.schema.json",
+        "version": 1,
+        "titulo_trabajo": body.titulo.strip(),
+        "extension": {
+            "unidad": "lineas",
+            "lineas_totales_objetivo": lineas_capitulo * body.capitulos,
+            # Cero, como la configuracion vigente: con capitulos de pocas lineas un
+            # margen porcentual no significa gran cosa y deja de poderse comprobar
+            # el reparto en parrafos (SPECS 12.1).
+            "tolerancia_capitulo_lineas": 0,
+            "tolerancia_total_lineas": 0,
+        },
+        "defaults": {"pov": "prota", **forma},
+        "capitulos": [
+            {"n": n, "acto": 1, **forma, "contiene_combate": False}
+            for n in range(1, body.capitulos + 1)
+        ],
+    }
+
+
+def redactar_brief(body: NuevaNovelaBody) -> str:
+    """El brief del autor con lo que ha declarado, y con un hueco donde no.
+
+    Las secciones vacias se escriben igualmente: son el hueco que `parsear_brief`
+    cuenta como faltante y que el panel enseña en rojo. Un brief al que le falta
+    el tono tiene que parecer un brief al que le falta el tono, no uno completo
+    con el tono que se haya inventado esta pantalla.
+    """
+    lineas_capitulo = body.parrafos_por_capitulo * body.lineas_por_parrafo
+    plural = "capítulos" if body.capitulos != 1 else "capítulo"
+    extension = (
+        f"{body.capitulos} {plural} de {body.parrafos_por_capitulo} párrafos de "
+        f"{body.lineas_por_parrafo} líneas cada uno: {lineas_capitulo} líneas por capítulo y "
+        f"{lineas_capitulo * body.capitulos} en total, con tolerancia cero. La forma exacta "
+        "vive en `config/capitulos.json`."
+    )
+    secciones = [
+        ("Premisa", body.giro.strip()),
+        ("Tono", body.tono.strip()),
+        ("Persona y tiempo narrativos", body.persona.strip()),
+        ("Extensión objetivo", extension),
+        ("Arco deseado", body.arco.strip()),
+        ("Vetos", body.vetos.strip()),
+    ]
+    cuerpo = "\n\n".join(f"## {nombre}\n\n{texto}".rstrip() for nombre, texto in secciones)
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    return (
+        "# Brief del autor · N0\n\n"
+        f"> Escrito desde el panel el {hoy}. El sistema no distingue entre un brief de\n"
+        "> prueba y uno definitivo: lo que aquí se ponga es lo que saldrá escrito. Las\n"
+        "> secciones en blanco son las que faltan, y el panel las señala hasta que se\n"
+        "> rellenen.\n\n---\n\n"
+        f"{cuerpo}\n"
+    )
+
+
+@app.post("/api/novela/nueva")
+def api_novela_nueva(body: NuevaNovelaBody) -> dict:
+    """Empieza una novela: brief nuevo, plan de capitulos nuevo y la memoria a cero.
+
+    Es la operacion mas destructiva del panel -se lleva la novela anterior
+    entera-, asi que antes de tocar nada se comprueba todo lo comprobable: la
+    frase de confirmacion, que no haya un paso corriendo, que el plan resultante
+    valide (RM-03) y que no quede trabajo sin commitear, porque el historial de
+    git es lo unico que sobrevive al borrado.
+
+    El orden no es casual: primero se vacia y despues se escribe. Al reves, un
+    fallo a mitad dejaria el plan nuevo conviviendo con la memoria de la novela
+    vieja, que es un estado que ningun script sabe leer.
+    """
+    if not body.titulo.strip():
+        raise HTTPException(400, "La novela necesita un título de trabajo: es lo que llevan en "
+                                 "la cabecera config/capitulos.json y el manuscrito.")
+    if not body.giro.strip():
+        raise HTTPException(400, "Sin giro no hay novela: es la premisa de la que sale todo lo "
+                                 "demás, y el sistema no la inventa.")
+    if body.capitulos < 1 or body.parrafos_por_capitulo < 1 or body.lineas_por_parrafo < 1:
+        raise HTTPException(400, "Capítulos, párrafos y líneas por párrafo son enteros de 1 "
+                                 "para arriba.")
+    if (body.capitulos > MAX_CAPITULOS or body.parrafos_por_capitulo > MAX_PARRAFOS
+            or body.lineas_por_parrafo > MAX_LINEAS_PARRAFO):
+        raise HTTPException(
+            400, f"Eso son {body.capitulos} capítulos de {body.parrafos_por_capitulo} × "
+                 f"{body.lineas_por_parrafo} líneas. El panel se planta en {MAX_CAPITULOS} "
+                 f"capítulos, {MAX_PARRAFOS} párrafos y {MAX_LINEAS_PARRAFO} líneas por "
+                 "párrafo por si es un dedazo; para más, edita config/capitulos.json a mano."
+        )
+    if body.confirmacion.strip() != FRASE_REINICIO:
+        raise HTTPException(400, f"Esto borra la novela vigente. Escribe «{FRASE_REINICIO}» en "
+                                 "la confirmación para seguir.")
+    exigir_libre()
+
+    sin_commitear = cambios_sin_commitear()
+    if sin_commitear and not body.forzar:
+        raise HTTPException(
+            409, "Hay cambios sin commitear en la novela vigente, y vaciarla los pierde para "
+                 "siempre: el historial de git es su única copia.\n"
+                 + "\n".join(sin_commitear[:12])
+                 + (f"\n…y {len(sin_commitear) - 12} más" if len(sin_commitear) > 12 else "")
+        )
+
+    propuesta = plan_nuevo(body)
+    errores = validar_capitulos.validar(propuesta)
+    if errores:
+        raise HTTPException(400, "El plan resultante no valida (RM-03):\n" + "\n".join(errores))
+
+    anterior = str(leer_json(CONFIG).get("titulo_trabajo", "")).strip() if CONFIG.exists() else ""
+    if anterior:
+        ok, salida = ejecutar_consolidar("reiniciar", "--confirmar", anterior,
+                                         entorno={"MSM_REINICIO_AUTORIZADO": "1"})
+        if not ok:
+            raise HTTPException(500, "No se ha podido vaciar la novela anterior, y no se ha "
+                                     f"tocado nada más:\n{salida}")
+    else:
+        salida = "No había ninguna novela vigente que vaciar."
+
+    escribir_json_atomico(CONFIG, propuesta)
+    (RAIZ / "brief.md").write_text(redactar_brief(body), encoding="utf-8")
+
+    # Restos de la novela anterior que no son ni memoria ni manuscrito: un plan de
+    # N2 a medio aprobar y la aprobacion del manuscrito viejo. Cualquiera de los
+    # dos, aplicado a la novela nueva, aprobaria algo que nadie ha leido.
+    for ruta in (pipeline.BIBLE_PENDIENTE, pipeline.OUTLINE_PENDIENTE, ESTADO_UI):
+        ruta.unlink(missing_ok=True)
+
+    return {
+        "titulo": propuesta["titulo_trabajo"],
+        "capitulos": body.capitulos,
+        "lineas_totales": propuesta["extension"]["lineas_totales_objetivo"],
+        "reinicio": salida,
+        "brief_faltantes": parsear_brief()["faltantes"],
+    }
 
 
 # --------------------------------------------------------------------------- lectura

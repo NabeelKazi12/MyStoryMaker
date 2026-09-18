@@ -52,6 +52,7 @@ const post = (ruta, datos) => api(ruta, { method: "POST", body: datos ? JSON.str
 // Lo que el autor ha abierto, elegido o movido. Sobrevive a los refrescos y a
 // recargar la pagina; no lo toca nada de lo que llega del servidor.
 const ui = {
+  vista: "panel",               // pestana de la pagina: panel o nueva novela
   abiertos: new Set(),          // claves de <details> desplegados
   capitulos: new Set(),         // numeros de capitulo con el detalle abierto
   pestanas: {},                 // n -> pestana activa del detalle
@@ -67,6 +68,7 @@ function cargarUI() {
     if (guardado.abiertos) ui.abiertos = new Set(guardado.abiertos);
     if (guardado.capitulos) ui.capitulos = new Set(guardado.capitulos);
     Object.assign(ui, {
+      vista: guardado.vista === "nueva" ? "nueva" : "panel",
       pestanas: guardado.pestanas || {},
       logAbierto: !!guardado.logAbierto,
       logAltura: guardado.logAltura || null,
@@ -1100,6 +1102,266 @@ document.addEventListener("keydown", (ev) => {
   else if (ev.key === "-") { ui.lectorTamano = Math.max(14, ui.lectorTamano - 1); aplicarLector(); }
 });
 
+// --------------------------------------------------------------------------- vistas
+
+// El panel y la creación de una novela no son dos momentos del mismo trabajo:
+// uno se usa cada día mientras la novela avanza y el otro una vez, al principio
+// -o el día que se decide tirarlo todo y empezar otra-. Por eso son pestañas y
+// no una tarjeta más al final, donde el botón que borra la novela viviría a un
+// scroll de distancia del que lanza el siguiente capítulo.
+function mostrarVista(id) {
+  ui.vista = id;
+  $$(".pestana", $("#pestanas-app")).forEach((b) => b.classList.toggle("pestana-activa", b.dataset.vista === id));
+  $("#vista-panel").hidden = id !== "panel";
+  $("#vista-nueva").hidden = id !== "nueva";
+  guardarUI();
+  if (id === "nueva") refrescarReemplazo();
+}
+
+$$(".pestana", $("#pestanas-app")).forEach((b) =>
+  b.addEventListener("click", () => mostrarVista(b.dataset.vista)));
+
+// --------------------------------------------------------------------------- novela nueva
+
+const FRASE_REINICIO = "EMPEZAR DE CERO";
+
+// Los nodos del formulario que el estado del proyecto sí puede tocar. El resto
+// -lo que el autor esté escribiendo- no lo toca nadie: escribir el giro de una
+// novela lleva su rato y un refresco de fondo no puede borrarlo a media frase.
+let nueva = null;
+
+// Tope de lo que se dibuja en la maqueta: un plan de cuarenta capítulos se
+// entiende con ocho, y dibujarlos todos sería una pared de rayas.
+const MAX_DIBUJADOS = 8, MAX_PARRAFOS_DIBUJADOS = 10, MAX_LINEAS_DIBUJADAS = 14;
+
+// El plan se enseña con la forma que va a tener el capítulo -un bloque por
+// párrafo, una raya por línea- y no como «3 × 4 = 12». Lo que se está eligiendo
+// aquí es la forma de la página, y una cuenta no se parece a una página.
+function maquetaCapitulo(n, parrafos, lineas) {
+  const forma = crear("div", { class: "cap-previo-forma" });
+  const bloques = Math.min(parrafos, MAX_PARRAFOS_DIBUJADOS);
+  const rayas = Math.min(lineas, MAX_LINEAS_DIBUJADAS);
+  for (let p = 0; p < bloques; p += 1) {
+    const bloque = crear("div", { class: "parrafo-previo" });
+    for (let l = 0; l < rayas; l += 1) {
+      // La última línea de un párrafo no llega al margen. Es el detalle que hace
+      // que un bloque se lea como párrafo y no como una tabla.
+      bloque.append(crear("i", { class: `linea-previa${l === rayas - 1 ? " linea-corta" : ""}` }));
+    }
+    forma.append(bloque);
+  }
+  if (parrafos > bloques) forma.append(crear("span", { class: "previo-mas" }, `+${parrafos - bloques} párrafos`));
+  return crear("div", { class: "cap-previo" },
+    crear("span", { class: "cap-previo-num" }, String(n)), forma);
+}
+
+function renderPlanPrevio(caja, cuenta, forma) {
+  const { caps, parrafos, lineas } = forma;
+  caja.innerHTML = "";
+  if (!(caps >= 1 && parrafos >= 1 && lineas >= 1)) {
+    cuenta.className = "pista-reparto no-cuadra";
+    cuenta.textContent = "Capítulos, párrafos y líneas por párrafo son enteros de 1 para arriba.";
+    return;
+  }
+  for (let n = 1; n <= Math.min(caps, MAX_DIBUJADOS); n += 1) {
+    caja.append(maquetaCapitulo(n, parrafos, lineas));
+  }
+  if (caps > MAX_DIBUJADOS) {
+    caja.append(crear("div", { class: "cap-previo cap-previo-resto" },
+      `…y ${caps - MAX_DIBUJADOS} capítulos más con la misma forma`));
+  }
+  const porCapitulo = parrafos * lineas;
+  cuenta.className = "pista-reparto cuadra";
+  cuenta.textContent = `${caps} ${caps === 1 ? "capítulo" : "capítulos"} de ${porCapitulo} líneas `
+    + `en ${parrafos} ${parrafos === 1 ? "párrafo" : "párrafos"} de ${lineas}: `
+    + `${porCapitulo * caps} líneas en total. Tolerancia cero, así que ${porCapitulo} son ${porCapitulo}.`;
+}
+
+// Lo que se va a borrar, dicho antes de borrarlo. Se recarga al entrar en la
+// pestaña y después de cada intento, no en el refresco de fondo: cada consulta
+// lanza un `git status` y esto no cambia solo.
+async function refrescarReemplazo() {
+  if (!nueva) return;
+  const caja = nueva.perdida;
+  let datos;
+  try {
+    datos = await api("/api/novela/reemplazo");
+  } catch (e) {
+    caja.innerHTML = "";
+    caja.append(crear("p", { class: "tenue" }, `No se ha podido consultar qué hay ahora: ${e.message}`));
+    return;
+  }
+  caja.innerHTML = "";
+
+  if (!datos.titulo && !datos.capitulos) {
+    caja.append(crear("p", {}, "No hay ninguna novela vigente: esto no borra nada."));
+  } else {
+    const piezas = [
+      `${datos.capitulos} ${datos.capitulos === 1 ? "capítulo" : "capítulos"} en el plan`,
+      `${datos.consolidados} consolidados`,
+      `${datos.manuscritos} en manuscript/`,
+      `${datos.research} ficheros de investigación`,
+    ];
+    if (datos.compilado) piezas.push("un manuscrito compilado");
+    caja.append(crear("p", {},
+      crear("strong", {}, `Se borra «${datos.titulo}»: `), piezas.join(", ") + "."));
+    caja.append(crear("p", { class: "tenue" },
+      "Se van la memoria (biblia, escaleta y ledger), el manuscrito, las revisiones, "
+      + "la investigación y el manuscrito compilado. No hay deshacer."));
+  }
+
+  const git = datos.git || {};
+  const sucio = git.sin_commitear || [];
+  if (!git.comprobable) {
+    caja.append(crear("p", { class: "aviso-git" },
+      "No se ha podido consultar git desde aquí, así que no puedo asegurarte que lo de ahora "
+      + "esté guardado en algún commit. Compruébalo antes de seguir."));
+  } else if (sucio.length) {
+    caja.append(crear("p", { class: "aviso-git" },
+      `Hay ${sucio.length} ${sucio.length === 1 ? "cambio" : "cambios"} sin commitear. `
+      + "El historial de git es la única copia de la novela anterior: lo que no esté "
+      + "commiteado no vuelve."));
+    caja.append(crear("ul", { class: "lista-git" },
+      ...sucio.slice(0, 12).map((l) => crear("li", { class: "mono" }, l)),
+      sucio.length > 12 ? crear("li", { class: "tenue" }, `…y ${sucio.length - 12} más`) : null));
+  } else {
+    caja.append(crear("p", { class: "tenue" },
+      "Todo lo de la novela vigente está commiteado: seguirá en el historial de git."));
+  }
+  nueva.forzarLinea.hidden = !sucio.length;
+}
+
+function montarNuevaNovela() {
+  const cont = $("#nueva-cuerpo");
+  cont.innerHTML = "";
+
+  const titulo = crear("input", { type: "text", placeholder: "Título de trabajo" });
+  const giro = crear("textarea", { rows: "4",
+    placeholder: "El giro: de qué va, qué la mueve y qué la hace distinta de cualquier otra…" });
+
+  const maqueta = crear("div", { class: "plan-previo" });
+  const cuenta = crear("p", { class: "pista-reparto" });
+  const repintar = () => renderPlanPrevio(maqueta, cuenta, leerForma());
+  const numero = (etiqueta, valor) => {
+    const input = crear("input", { type: "number", min: "1", value: String(valor), oninput: repintar });
+    return { input, nodo: crear("label", { class: "campo" }, etiqueta, input) };
+  };
+  const capitulos = numero("Capítulos", 3);
+  const parrafos = numero("Párrafos por capítulo", 3);
+  const lineas = numero("Líneas por párrafo", 4);
+  const leerForma = () => ({
+    caps: Number(capitulos.input.value), parrafos: Number(parrafos.input.value),
+    lineas: Number(lineas.input.value),
+  });
+
+  const tono = crear("textarea", { rows: "2", placeholder: "Realismo sucio, sin épica…" });
+  const persona = crear("textarea", { rows: "2", placeholder: "Primera persona en pasado…" });
+  const arco = crear("textarea", { rows: "2", placeholder: "De dónde sale y dónde acaba…" });
+  const vetos = crear("textarea", { rows: "2", placeholder: "Lo que no quieres ver…" });
+  const seccion = (etiqueta, campo) => crear("div", { class: "campo-largo" },
+    crear("label", { class: "campo-etiqueta" }, etiqueta), campo);
+
+  const perdida = crear("div", { class: "peligro-caja" });
+  const confirmacion = crear("input", { type: "text", placeholder: FRASE_REINICIO });
+  const forzar = crear("input", { type: "checkbox" });
+  const forzarLinea = crear("label", { class: "campo-check" }, forzar,
+    "Sí, y doy por perdido lo que no esté commiteado");
+  forzarLinea.hidden = true;
+  const resultado = crear("div", {});
+  const boton = crear("button", { class: "primario btn-nueva", onclick: () => crearNovela() },
+    "Empezar de cero con esta novela");
+
+  async function crearNovela() {
+    const forma = leerForma();
+    try {
+      const r = await post("/api/novela/nueva", {
+        titulo: titulo.value,
+        giro: giro.value,
+        capitulos: forma.caps,
+        parrafos_por_capitulo: forma.parrafos,
+        lineas_por_parrafo: forma.lineas,
+        tono: tono.value, persona: persona.value, arco: arco.value, vetos: vetos.value,
+        confirmacion: confirmacion.value,
+        forzar: forzar.checked,
+      });
+      aviso(`«${r.titulo}» creada: ${r.capitulos} ${r.capitulos === 1 ? "capítulo" : "capítulos"}, `
+        + `${r.lineas_totales} líneas. La memoria está a cero.`, "ok");
+      confirmacion.value = "";
+      forzar.checked = false;
+      pintarResultado(r);
+      cargarEstado().catch(() => {});
+      refrescarReemplazo();
+    } catch (e) {
+      avisar(e);
+      refrescarReemplazo();
+    }
+  }
+
+  // Nada salta de pestaña solo: la novela está creada y el siguiente paso se
+  // ofrece, no se toma por ti.
+  function pintarResultado(r) {
+    resultado.innerHTML = "";
+    const faltan = r.brief_faltantes || [];
+    resultado.append(crear("div", { class: "resultado-nueva" },
+      crear("p", {}, crear("strong", {}, `«${r.titulo}» está en pie. `),
+        "El plan y el brief están escritos y la memoria vacía."),
+      faltan.length
+        ? crear("p", { class: "aviso-git" },
+          `Al brief le faltan ${faltan.join(", ")}. N1 y N2 no arrancan hasta que estén: `
+          + "complétalos en brief.md, que el sistema no los inventa.")
+        : crear("p", { class: "tenue" }, "El brief está completo: ya se puede lanzar N1 y N2."),
+      crear("button", { class: "chico", onclick: () => mostrarVista("panel") }, "Ir al panel →")));
+  }
+
+  cont.append(
+    crear("p", { class: "tenue" },
+      "Esto escribe brief.md y config/capitulos.json y deja la memoria a cero para empezar otra "
+      + "novela. Lo que hay ahora no se archiva en ninguna parte: su copia es el historial de git."),
+    crear("div", { class: "campo-largo" },
+      crear("label", { class: "campo-etiqueta" }, "Título de trabajo"), titulo),
+    seccion("El giro de la novela", giro),
+    crear("div", { class: "fila campos" }, capitulos.nodo, parrafos.nodo, lineas.nodo),
+    cuenta,
+    maqueta,
+    crear("p", { class: "tenue nota-plan" },
+      "Todos los capítulos nacen en el acto 1 y sin combate: el reparto en actos y dónde cae "
+      + "cada combate son decisiones tuyas, y se ajustan capítulo a capítulo o en "
+      + "config/capitulos.json."),
+    detalles("nueva-brief", "El resto del brief · tono, persona, arco y vetos",
+      crear("p", { class: "tenue" },
+        "Opcional aquí, obligatorio para arrancar: lo que dejes en blanco sale como hueco en "
+        + "brief.md y el panel lo marcará como incompleto hasta que lo rellenes. Nadie lo "
+        + "rellena por ti, y menos esta pantalla."),
+      seccion("Tono", tono),
+      seccion("Persona y tiempo narrativos", persona),
+      seccion("Arco deseado", arco),
+      seccion("Vetos", vetos)),
+    crear("div", { class: "peligro-zona" },
+      crear("h3", {}, "Lo que se pierde"),
+      perdida,
+      crear("div", { class: "fila", style: "margin-top:0.6rem" },
+        crear("label", { class: "campo" }, `Escribe «${FRASE_REINICIO}» para confirmar`, confirmacion),
+        forzarLinea),
+      crear("div", { class: "fila", style: "margin-top:0.7rem" }, boton)),
+    resultado);
+
+  nueva = { boton, perdida, forzarLinea };
+  repintar();
+  refrescarReemplazo();
+}
+
+// Lo único que el estado del proyecto decide en esta pestaña: con un paso
+// corriendo no se vacía la novela por debajo.
+function renderNuevaNovela() {
+  if (!nueva) return;
+  nueva.boton.disabled = !!estado.job_activo;
+  nueva.boton.title = estado.job_activo
+    ? "Hay un paso en curso. Espera a que termine o cancélalo antes de empezar otra novela." : "";
+}
+
+montarNuevaNovela();
+mostrarVista(ui.vista);
+
 // --------------------------------------------------------------------------- arranque
 
 async function cargarEstado() {
@@ -1111,6 +1373,7 @@ async function cargarEstado() {
   await renderEscaleta();
   renderCapitulos();
   renderNuevoCapitulo();
+  renderNuevaNovela();
   renderManuscrito();
   if (estado.job_activo) seguirJob(estado.job_activo.id);
 }

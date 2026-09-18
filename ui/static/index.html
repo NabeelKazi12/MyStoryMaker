@@ -15,44 +15,58 @@
   </header>
 
   <main id="main">
-    <div id="alertas"></div>
+    <nav class="pestanas pestanas-app" id="pestanas-app">
+      <button class="pestana pestana-activa" data-vista="panel">Panel de control</button>
+      <button class="pestana" data-vista="nueva">Nueva novela</button>
+    </nav>
 
-    <section class="tarjeta" id="tarjeta-circuito">
-      <h2>El circuito <span class="tenue" id="circuito-donde"></span></h2>
-      <div id="circuito"></div>
-    </section>
+    <div class="vista" id="vista-panel">
+      <div id="alertas"></div>
 
-    <section class="tarjeta" id="tarjeta-brief">
-      <h2>N0 · Brief del autor</h2>
-      <div id="brief-cuerpo"></div>
-    </section>
+      <section class="tarjeta" id="tarjeta-circuito">
+        <h2>El circuito <span class="tenue" id="circuito-donde"></span></h2>
+        <div id="circuito"></div>
+      </section>
 
-    <section class="tarjeta" id="tarjeta-escaleta">
-      <h2>N1 y N2 · Investigación y escaleta</h2>
-      <div id="escaleta-cuerpo"></div>
-    </section>
+      <section class="tarjeta" id="tarjeta-brief">
+        <h2>N0 · Brief del autor</h2>
+        <div id="brief-cuerpo"></div>
+      </section>
 
-    <section class="tarjeta" id="tarjeta-capitulos">
-      <h2>Capítulos</h2>
-      <div class="fila-entre" style="margin-bottom:0.7rem">
-        <span class="tenue" id="capitulos-resumen"></span>
-        <button id="btn-continuar">Continuar (hasta agotar pendientes o escalar)</button>
-      </div>
-      <div class="capitulos" id="capitulos-lista"></div>
-      <div id="nuevo-capitulo"></div>
-    </section>
+      <section class="tarjeta" id="tarjeta-escaleta">
+        <h2>N1 y N2 · Investigación y escaleta</h2>
+        <div id="escaleta-cuerpo"></div>
+      </section>
 
-    <section class="tarjeta" id="tarjeta-manuscrito">
-      <h2>N5 · Manuscrito final</h2>
-      <div id="manuscrito-cuerpo"></div>
-    </section>
+      <section class="tarjeta" id="tarjeta-capitulos">
+        <h2>Capítulos</h2>
+        <div class="fila-entre" style="margin-bottom:0.7rem">
+          <span class="tenue" id="capitulos-resumen"></span>
+          <button id="btn-continuar">Continuar (hasta agotar pendientes o escalar)</button>
+        </div>
+        <div class="capitulos" id="capitulos-lista"></div>
+        <div id="nuevo-capitulo"></div>
+      </section>
 
-    <section class="tarjeta" id="tarjeta-coste">
-      <h2>Coste (Langfuse)</h2>
-      <div id="coste-cuerpo">
-        <button id="btn-coste" class="chico">Cargar resumen de coste</button>
-      </div>
-    </section>
+      <section class="tarjeta" id="tarjeta-manuscrito">
+        <h2>N5 · Manuscrito final</h2>
+        <div id="manuscrito-cuerpo"></div>
+      </section>
+
+      <section class="tarjeta" id="tarjeta-coste">
+        <h2>Coste (Langfuse)</h2>
+        <div id="coste-cuerpo">
+          <button id="btn-coste" class="chico">Cargar resumen de coste</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="vista" id="vista-nueva" hidden>
+      <section class="tarjeta">
+        <h2>N0 · Empezar una novela nueva</h2>
+        <div id="nueva-cuerpo"></div>
+      </section>
+    </div>
   </main>
 
   <div class="avisos-zona" id="avisos-zona" hidden>
