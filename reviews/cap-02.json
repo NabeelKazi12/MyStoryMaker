@@ -1,0 +1,107 @@
+{
+  "capitulo": 2,
+  "iteracion": 1,
+  "puntuaciones": {
+    "tension": 4,
+    "verosimilitud_tecnica": 4,
+    "avance_arco": 4,
+    "prosa": 4,
+    "continuidad": 5
+  },
+  "media": 4.2,
+  "veredicto": "aprobado",
+  "verificacion_combate": {
+    "guardia_coherente": false,
+    "pie_adelantado": false,
+    "clinch": false,
+    "esquina": false,
+    "tarjetas": false,
+    "observaciones": "config/capitulos.json marca contiene_combate=false para el capitulo 2 y la biblia lo veta expresamente. No hay combate oficial ni sparring propio del protagonista dentro del ring: las dos sesiones aceptadas son para martes futuros y quedan fuera de escena, y el ring alquilado del jueves no se usa en el capitulo. Los cinco puntos de la checklist no aplican y por eso van en false; su ausencia no limita la nota de verosimilitud. La unica materia tecnica presente es el encargo del manager en la linea 9 (sacar el pie por fuera y obligar al ortodoxo a girar hacia su derecha), que es coherente con research/01: el duelo se decide en el pie adelantado y forzar el giro hacia la derecha del diestro lo mete en la trayectoria del recto de izquierda. Correcto y bien elegido."
+  },
+  "notas": [
+    {
+      "severidad": "media",
+      "ubicacion": "linea 11",
+      "problema": "\"Dijo tambien que a su chico dos con futuro le habian dicho que no\": la sintaxis es ambigua y en primera lectura se entiende \"su chico dos\" como si el manager tuviera varios chicos numerados. El dato de INV-08 mas importante del capitulo, que los rivales con futuro rehuyen a un zurdo, se pierde en la confusion.",
+      "sugerencia": "Reordenar sin anadir linea, por ejemplo: \"Dijo tambien que dos con futuro le habian dicho que no a su chico: un zurdo da un combate feo y el video despues no sirve.\""
+    },
+    {
+      "severidad": "media",
+      "ubicacion": "parrafo 2, lineas 8 a 11",
+      "problema": "El parrafo es informe puro: Yeray cuenta y Damian escucha, y entre la linea 8 y la 11 no cambia nada en la escena. Es donde se hunde la tension del capitulo, porque el lector recibe el dato decisivo sin ver lo que le cuesta a quien lo recibe.",
+      "sugerencia": "Anclar el reporte en un gesto fisico del protagonista que acuse el golpe sin nombrarlo, en la linea de los tics de voz de la biblia (describir el cuerpo y dejar el nombre fuera). Sustituir parte de la enumeracion de la linea 9, no anadir texto: la extension es exacta."
+    },
+    {
+      "severidad": "media",
+      "ubicacion": "linea 8",
+      "problema": "Linea sobrecargada: accion (el vendaje con los dientes), reporte indirecto y la coletilla \"sin animo de ofender\" al final, donde queda colgando de \"el manager\" y no de Yeray, que es quien la dice. Ademas es la formula literal de la ficha de escaleta, y suena a muletilla importada.",
+      "sugerencia": "Llevar la coletilla a su hablante al principio de la frase o eliminarla y dejar que el tono casual de Yeray la haga innecesaria; el efecto ya lo consigue la linea 10."
+    },
+    {
+      "severidad": "media",
+      "ubicacion": "linea 9",
+      "problema": "Treinta y cuatro palabras con tres subordinadas encadenadas justo en el punto donde va el unico dato tecnico del capitulo. El lector llega al tercer requisito habiendo soltado el primero.",
+      "sugerencia": "Comprimir dentro de la misma linea (no partir: 12 lineas exactas, tolerancia cero), por ejemplo dejando dos requisitos con verbo y el tercero en aposicion seca."
+    },
+    {
+      "severidad": "baja",
+      "ubicacion": "linea 15",
+      "problema": "\"Doce, fuera de horario; pague cuatro por adelantado\" es ambiguo: \"cuatro\" puede leerse como cuatro euros y solo se desambigua una linea despues, con los cuarenta y ocho de la linea 16. En un narrador que mide todo en cifras, la ambiguedad numerica cuesta cara.",
+      "sugerencia": "\"pague cuatro horas por adelantado\", que ademas hace que los cuarenta y ocho de la linea siguiente cuadren solos en la cabeza del lector."
+    },
+    {
+      "severidad": "baja",
+      "ubicacion": "lineas 15 y 16",
+      "problema": "La conexion entre el ring alquilado y el hilo h01-guardia-contraria es totalmente implicita: el capitulo nunca dice para que compra esa hora. Funciona para quien recuerde el final del capitulo 1, pero el gesto que sostiene el arco queda a merced de esa memoria.",
+      "sugerencia": "Una sola palabra en la linea 15 o 16 que ate el jueves a lo que hace a solas, sin explicarlo ni nombrarlo (el veto de sentencia final sigue en pie): basta con que el horario elegido se justifique por que no hay nadie."
+    },
+    {
+      "severidad": "baja",
+      "ubicacion": "linea 5",
+      "problema": "\"el mismo chico de guardia estandar\" repite la etiqueta del capitulo 1 sin anadir nada. \"El mismo chico\" ya lo identifica; \"de guardia estandar\" es informacion que el lector tiene desde la linea 4 del capitulo anterior.",
+      "sugerencia": "Liberar esas tres palabras para el dato que falta y que si importaria al oficio: la categoria o el peso del prospecto, que es lo que hace del encargo un emparejamiento sensato (research/05: emparejar mal de peso es como se lesiona la gente)."
+    },
+    {
+      "severidad": "baja",
+      "ubicacion": "linea 16, cierre",
+      "problema": "\"Nuria sumaba\" repite casi literalmente el cierre del capitulo 1 (\"escribio el nombre del chaval en las seis casillas de la pizarra y siguio sumando\"). El eco es deliberado y funciona, pero al ser dos cierres de capitulo seguidos con la misma imagen corre el riesgo de leerse como tic del autor y no del personaje.",
+      "sugerencia": "Mantener el eco si es intencional, pero desplazarlo: dejar que la ultima frase sea la linea a mano de la pizarra y que Nuria sumando quede antes."
+    },
+    {
+      "severidad": "baja",
+      "ubicacion": "linea 16, hilo nuevo",
+      "problema": "El capitulo abre un hilo nuevo (cuatro horas de ring pagadas, jueves de nueve a diez) y config/capitulos.json solo planifica dos capitulos. El manuscrito se cerrara con ese hilo y con h01-guardia-contraria pendientes, y N5 lo advertira.",
+      "sugerencia": "No es defecto del capitulo ni motivo de reescritura: es una decision del autor sobre la extension del plan. Se deja registrado aqui para que el orquestador lo eleve."
+    }
+  ],
+  "hechos_nuevos": [
+    {
+      "tipo": "hilo_cerrado",
+      "id": "h01-martes-seis-sesiones"
+    },
+    {
+      "tipo": "hilo_cerrado",
+      "id": "h01-tarifa-sparring-encargo"
+    },
+    {
+      "tipo": "cronologia",
+      "fecha_ficcion": "posterior a marzo; el capitulo no fija el mes. Escena diurna en el mostrador del gimnasio, inmediatamente posterior a una sesion de Yeray",
+      "evento": "A Yeray Miralles le sale fecha de combate y no puede cubrir dos de las seis sesiones de sparring del martes (18:00-19:00) compradas por el manager de fuera. Nuria se lo ofrece a Damian a veinticinco euros la hora, sin presentarlo como favor ni como oportunidad.",
+      "resultado": "Damian acepta las dos sesiones a veinticinco sin regatear y sin mencionar los cuarenta euros que cobro en marzo. Pide que las otras cuatro queden asignadas a Yeray y que el martes deje de contarse como suyo: la hora de los martes que tenia desde febrero queda perdida como derecho adquirido. En la pizarra, Yeray en cuatro casillas y Damian en dos."
+    },
+    {
+      "tipo": "cronologia",
+      "fecha_ficcion": "mismo dia, en el mostrador, justo despues de aceptar las dos sesiones",
+      "evento": "Damian pregunta el precio de alquilar el ring vacio una hora entre semana fuera de horario: doce euros la hora. Compra cuatro horas y las paga por adelantado, cuarenta y ocho euros sobre el mostrador.",
+      "resultado": "Queda escrita a mano en la pizarra una linea nueva en un dia que no es martes: jueves, de nueve a diez. Es la primera vez que Damian pone dinero propio en lugar de su record o su mano como argumento."
+    },
+    {
+      "tipo": "hilo_abierto",
+      "id": "h02-ring-jueves",
+      "descripcion": "Damian ha pagado por adelantado cuatro horas de ring vacio, jueves de nueve a diez, a doce euros la hora fuera de horario, sin decirle a nadie para que. En el capitulo no llega a usar ninguna. El hilo se cierra cuando esas cuatro horas se agoten, se usen para algo mostrado en escena, o Damian deje de pagarlas; esta encadenado con h01-guardia-contraria, que sigue abierto y es la razon no declarada de la compra.",
+      "cerrar_antes_de": 3
+    }
+  ],
+  "contradicciones": [],
+  "resumen": "Nuria le ofrece a Damian dos de las seis sesiones de sparring del martes a veinticinco euros la hora, porque a Yeray Miralles le ha salido fecha y no puede cubrirlas; Yeray le cuenta que el manager de fuera no pidio un nombre sino una guardia, un peso y seis asaltos, y que dos prospectos con futuro rechazaron pelear contra un zurdo porque da un combate feo que no luce en video. Damian acepta las dos sesiones a veinticinco sin regatear y sin nombrar los cuarenta de marzo, cede las otras cuatro a Yeray, renuncia al martes que tenia desde febrero, y con el mismo gesto compra cuatro horas de ring vacio los jueves de nueve a diez a doce euros la hora, cuarenta y ocho euros pagados por adelantado."
+}

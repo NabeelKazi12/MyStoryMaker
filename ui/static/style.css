@@ -1,0 +1,208 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f6f5f2;
+  --panel: #ffffff;
+  --texto: #1c1b19;
+  --tenue: #6b6a66;
+  --borde: #e4e1da;
+  --acento: #8a3324;
+  --acento-suave: #f1e2dd;
+  --ok: #2f6b3c;
+  --ok-bg: #e6f2e8;
+  --aviso: #92650a;
+  --aviso-bg: #fbf1de;
+  --error: #a3311f;
+  --error-bg: #fbe9e6;
+  --escalado-bg: #f6e1c8;
+  --sombra: 0 1px 2px rgba(20, 18, 14, 0.06), 0 6px 16px rgba(20, 18, 14, 0.05);
+  --radio: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #171512;
+    --panel: #221f1b;
+    --texto: #ece8e1;
+    --tenue: #9c988f;
+    --borde: #38342c;
+    --acento: #d97a5f;
+    --acento-suave: #3a2620;
+    --ok: #7fce93;
+    --ok-bg: #1c3123;
+    --aviso: #e0b45c;
+    --aviso-bg: #3a2f14;
+    --error: #e88b7a;
+    --error-bg: #3a201b;
+    --escalado-bg: #4a3620;
+    --sombra: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.35);
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--texto);
+  font: 14px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif;
+  padding-bottom: 4rem;
+}
+
+header {
+  padding: 1.25rem clamp(1rem, 4vw, 2.5rem) 1rem;
+  border-bottom: 1px solid var(--borde);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1rem;
+}
+
+header h1 { font-size: 1.15rem; margin: 0; }
+header .subtitulo { color: var(--tenue); font-size: 0.9rem; }
+header .badges { margin-left: auto; display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+main {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 1.25rem clamp(1rem, 4vw, 2.5rem) 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.badge-ok { background: var(--ok-bg); color: var(--ok); }
+.badge-aviso { background: var(--aviso-bg); color: var(--aviso); }
+.badge-error { background: var(--error-bg); color: var(--error); }
+.badge-neutro { background: var(--acento-suave); color: var(--acento); }
+
+.alerta {
+  border-radius: var(--radio);
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  border: 1px solid transparent;
+}
+.alerta-aviso { background: var(--aviso-bg); color: var(--aviso); border-color: color-mix(in srgb, var(--aviso) 30%, transparent); }
+.alerta-error { background: var(--error-bg); color: var(--error); border-color: color-mix(in srgb, var(--error) 30%, transparent); }
+
+.tarjeta {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra);
+  padding: 1rem 1.1rem;
+}
+
+.tarjeta h2 {
+  margin: 0 0 0.7rem;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.fila { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.fila-entre { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; }
+
+.tenue { color: var(--tenue); }
+.mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+
+button {
+  font: inherit;
+  border: 1px solid var(--borde);
+  background: var(--panel);
+  color: var(--texto);
+  border-radius: 7px;
+  padding: 0.4rem 0.85rem;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--acento); color: var(--acento); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.primario { background: var(--acento); border-color: var(--acento); color: #fff; }
+button.primario:hover:not(:disabled) { filter: brightness(1.08); color: #fff; }
+button.peligro { color: var(--error); border-color: color-mix(in srgb, var(--error) 40%, var(--borde)); }
+button.chico { padding: 0.25rem 0.6rem; font-size: 0.82rem; }
+
+textarea, input[type=text] {
+  font: inherit;
+  width: 100%;
+  border: 1px solid var(--borde);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--texto);
+  padding: 0.5rem 0.6rem;
+  resize: vertical;
+}
+
+.capitulos { display: flex; flex-direction: column; gap: 0.6rem; }
+.capitulo {
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  padding: 0.7rem 0.85rem;
+}
+.capitulo.escalado { background: var(--escalado-bg); border-color: color-mix(in srgb, var(--aviso) 40%, var(--borde)); }
+.capitulo .detalle { margin-top: 0.6rem; border-top: 1px dashed var(--borde); padding-top: 0.6rem; display: none; }
+.capitulo .detalle.abierto { display: block; }
+.capitulo pre.texto {
+  white-space: pre-wrap;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.85rem;
+  background: var(--bg);
+  border: 1px solid var(--borde);
+  border-radius: 7px;
+  padding: 0.6rem 0.75rem;
+  max-height: 260px;
+  overflow: auto;
+}
+.notas-review { margin: 0.4rem 0 0; padding-left: 1.1rem; font-size: 0.85rem; }
+.notas-review li { margin-bottom: 0.35rem; }
+
+table.coste { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+table.coste th, table.coste td { text-align: right; padding: 0.25rem 0.5rem; }
+table.coste th:first-child, table.coste td:first-child { text-align: left; }
+table.coste tbody tr:nth-child(odd) { background: var(--acento-suave); }
+
+.panel-log {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  background: var(--panel);
+  border-top: 1px solid var(--borde);
+  box-shadow: 0 -6px 18px rgba(0,0,0,0.12);
+  max-height: 45vh;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(calc(100% - 2.4rem));
+  transition: transform 0.15s ease;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.panel-log.abierto { transform: translateY(0); }
+.panel-log .cabecera {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  user-select: none;
+}
+.panel-log .cabecera strong { flex: 1; }
+.panel-log .cuerpo {
+  overflow: auto;
+  padding: 0 1rem 0.8rem;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+}
+.punto { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.punto-curso { background: var(--aviso); animation: pulso 1.2s infinite; }
+.punto-ok { background: var(--ok); }
+.punto-error { background: var(--error); }
+@keyframes pulso { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+[hidden] { display: none !important; }

@@ -40,6 +40,25 @@ python scripts/compilar.py
 Abre una sesión headless por paso, no repite el trabajo ya hecho y se detiene con
 el motivo por escrito en cuanto el sistema necesita una decisión del autor.
 
+## Panel de control
+
+Para gobernar el harness sin terminal ni sesión de Claude Code delante: un
+servidor local que envuelve `scripts/` en una página con el progreso, botones
+para lanzar cada paso como un job en segundo plano con log en vivo, y pantallas
+para decidir en los cuatro puntos que son del autor (brief incompleto, escaleta,
+capítulo escalado y manuscrito final).
+
+```
+pip install -r requirements.txt
+python ui/server.py
+```
+
+Abre `http://127.0.0.1:8765`. Es la única parte del proyecto con una dependencia
+externa (FastAPI); `scripts/` sigue sin necesitar nada fuera de la librería
+estándar. El plan de N2 pendiente de aprobar se guarda en `ui/pendientes/` —
+fuera de `memory/`, que el hook `bloquear_memoria.py` protege— y la aprobación
+del manuscrito final en `ui/estado_ui.json`; ninguno de los dos se versiona.
+
 ## Estructura
 
 | Ruta | Qué hay |

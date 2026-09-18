@@ -13,6 +13,20 @@ import sys
 import tempfile
 from pathlib import Path
 
+# La consola de Windows va en cp1252 y lo que se imprime aqui —la salida de una
+# sesion headless, el titulo de un capitulo, el motivo de un hook— trae flechas,
+# comillas tipograficas y guiones largos. Sin esto, un solo caracter fuera de la
+# tabla lanza UnicodeEncodeError: en `compilar.py` eso aborta la produccion justo
+# despues de haberla pagado, con el capitulo ya consolidado en disco y N5 sin
+# correr. Se conserva la codificacion de la consola y solo se relaja el error,
+# asi que un caracter raro sale como '?' en vez de tirar el proceso.
+for _flujo in (sys.stdout, sys.stderr):
+    if hasattr(_flujo, "reconfigure"):
+        try:
+            _flujo.reconfigure(errors="replace")
+        except (ValueError, OSError):
+            pass
+
 RAIZ = Path(__file__).resolve().parent.parent
 
 CONFIG = RAIZ / "config" / "capitulos.json"

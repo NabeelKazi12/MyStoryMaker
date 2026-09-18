@@ -1,0 +1,8 @@
+# El harness en si (scripts/) no depende de nada fuera de la libreria estandar
+# a proposito: los hooks corren en el entorno del autor y una instalacion
+# fallida de paquetes los convertiria en un guardian silencioso. Esta es la
+# unica dependencia externa del proyecto, y la usa solo ui/server.py (el
+# panel de control web; opcional, no hace falta para /novela ni para
+# scripts/compilar.py).
+fastapi>=0.115
+uvicorn[standard]>=0.30

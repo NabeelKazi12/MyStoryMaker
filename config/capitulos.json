@@ -1,10 +1,10 @@
 {
   "$schema": "./capitulos.schema.json",
-  "version": 3,
+  "version": 4,
   "titulo_trabajo": "El zurdo",
   "extension": {
     "unidad": "lineas",
-    "lineas_totales_objetivo": 12,
+    "lineas_totales_objetivo": 24,
     "tolerancia_capitulo_lineas": 0,
     "tolerancia_total_lineas": 0
   },
@@ -19,6 +19,14 @@
       "n": 1,
       "acto": 1,
       "titulo": "Guardia invertida",
+      "lineas_objetivo": 12,
+      "parrafos_objetivo": 3,
+      "lineas_por_parrafo": 4,
+      "contiene_combate": false
+    },
+    {
+      "n": 2,
+      "acto": 1,
       "lineas_objetivo": 12,
       "parrafos_objetivo": 3,
       "lineas_por_parrafo": 4,

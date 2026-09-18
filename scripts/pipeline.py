@@ -18,10 +18,12 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import langfuse_cliente as lf
 from _comun import CONFIG, MANUSCRITO, OUTLINE, RAIZ, RESEARCH, leer_json
 
 # Herramientas que la sesion headless necesita. El workspace puede no estar
@@ -71,8 +73,15 @@ def orden_claude() -> list[str]:
     return [ruta]
 
 
-def lanzar(etiqueta: str, prompt: str, timeout: int) -> str:
-    """Abre una sesion headless y devuelve su salida final."""
+def lanzar(etiqueta: str, prompt: str, timeout: int, *, on_linea=None,
+           registrar_proceso=None) -> str:
+    """Abre una sesion headless y devuelve su salida final.
+
+    `on_linea`, si se pasa, se llama con cada linea de salida segun se produce
+    (lo usa la UI para mostrar el log en vivo; sin el, el comportamiento -y la
+    salida por consola- es identico al de antes). `registrar_proceso` recibe el
+    Popen nada mas arrancar, para que quien lanzo el paso pueda cancelarlo.
+    """
     orden = orden_claude() + [
         "-p", prompt,
         "--permission-mode", "acceptEdits",
@@ -82,24 +91,62 @@ def lanzar(etiqueta: str, prompt: str, timeout: int) -> str:
     print(f"\n>>> {etiqueta}", flush=True)
     print(f"    sesion headless en curso (limite {timeout // 60} min)...", flush=True)
     inicio = time.time()
+    proceso = subprocess.Popen(orden, cwd=str(RAIZ), stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                                errors="replace", bufsize=1)
+    if registrar_proceso:
+        registrar_proceso(proceso)
+
+    agotado = threading.Event()
+    temporizador = threading.Timer(timeout, lambda: (agotado.set(), proceso.kill()))
+    temporizador.daemon = True
+    temporizador.start()
+
+    lineas: list[str] = []
     try:
-        proceso = subprocess.run(orden, cwd=str(RAIZ), capture_output=True, text=True,
-                                 encoding="utf-8", errors="replace", timeout=timeout)
-    except subprocess.TimeoutExpired:
+        for linea in proceso.stdout:
+            linea = linea.rstrip("\n")
+            lineas.append(linea)
+            if on_linea:
+                on_linea(linea)
+    finally:
+        proceso.wait()
+        temporizador.cancel()
+
+    minutos = (time.time() - inicio) / 60
+    salida = "\n".join(lineas).strip()
+    if agotado.is_set():
         raise PasoFallido(
             f"{etiqueta}: la sesion ha superado {timeout // 60} minutos y se ha cortado. "
             "Lo ya escrito en disco se conserva; vuelve a lanzar el script y continuara "
             "desde donde se quedo."
         )
-    minutos = (time.time() - inicio) / 60
-    salida = (proceso.stdout or "").strip()
     if proceso.returncode != 0:
-        detalle = (proceso.stderr or salida or "sin salida").strip()[:800]
+        detalle = salida[-800:] or "sin salida"
         raise PasoFallido(f"{etiqueta}: la sesion ha terminado con error.\n{detalle}")
     print(f"    hecho en {minutos:.1f} min", flush=True)
+    enlace = traza_del_paso()
+    if enlace:
+        print(f"    traza: {enlace}", flush=True)
     if salida:
         print("    " + "\n    ".join(salida.splitlines()[-12:]), flush=True)
     return salida
+
+
+def traza_del_paso() -> str:
+    """Enlace a la traza de la sesion headless que acaba de terminar.
+
+    Cada paso abre su propia sesion, y por tanto su propia traza. El hook de
+    SessionStart deja apuntado cual es; aqui solo se traduce a URL para no tener
+    que ir a buscarla a Langfuse a mano.
+    """
+    try:
+        if not lf.activo():
+            return ""
+        sesion = lf.sesion_actual()
+        return lf.enlace(sesion["trace_id"]) if sesion and sesion.get("trace_id") else ""
+    except Exception:
+        return ""
 
 
 # --------------------------------------------------------------------------- pasos
@@ -121,7 +168,7 @@ def estado_capitulo(n: int) -> str:
     return "ausente"
 
 
-def paso_preparar() -> None:
+def paso_preparar(*, on_linea=None, registrar_proceso=None) -> None:
     if escaleta_sembrada():
         print(">>> N1 y N2 ya estan hechos: escaleta sembrada.", flush=True)
         return
@@ -147,7 +194,7 @@ ficheros temporales y persistelos:
 
 Detente ahi: el capitulo lo escribe una ejecucion posterior. Termina con dos lineas
 diciendo que has sembrado y con que titulo y objetivo queda el capitulo.""",
-           TIMEOUT_PREPARAR)
+           TIMEOUT_PREPARAR, on_linea=on_linea, registrar_proceso=registrar_proceso)
 
     if not escaleta_sembrada():
         raise PasoFallido(
@@ -157,12 +204,84 @@ diciendo que has sembrado y con que titulo y objetivo queda el capitulo.""",
         )
 
 
-def paso_capitulo(n: int) -> None:
+PENDIENTES = RAIZ / "ui" / "pendientes"
+BIBLE_PENDIENTE = PENDIENTES / "bible.json"
+OUTLINE_PENDIENTE = PENDIENTES / "outline.json"
+
+
+def escaleta_pendiente_de_aprobacion() -> bool:
+    return BIBLE_PENDIENTE.exists() and OUTLINE_PENDIENTE.exists()
+
+
+def paso_preparar_ui(indicaciones: str | None = None, *, on_linea=None,
+                      registrar_proceso=None) -> None:
+    """Variante interactiva de N1/N2: genera el plan y se detiene sin persistir.
+
+    A diferencia de `paso_preparar` (pensado para `compilar.py`, sin nadie
+    delante a quien preguntar), aqui la aprobacion del autor es real: el paso
+    deja la biblia y el plan en `ui/pendientes/` -fuera de `memory/`, que el
+    hook `bloquear_memoria.py` protege- para que la UI se los muestre antes de
+    sembrarlos con `consolidar.py`.
+    """
+    if escaleta_sembrada():
+        print(">>> N1 y N2 ya estan hechos: escaleta sembrada.", flush=True)
+        return
+
+    investigacion = (
+        "research/ ya tiene los seis temas cubiertos: NO vuelvas a lanzar el subagente "
+        "'investigacion', leelos y pasa directamente a N2."
+        if hay_investigacion() else
+        "research/ esta vacio: lanza el subagente 'investigacion' (N1) y cubre sus seis "
+        "temas obligatorios antes de N2."
+    )
+    reintento = (
+        f"""
+
+Este plan es un reintento: el autor rechazo la version anterior con este motivo,
+atiendelo antes que nada:
+{indicaciones}"""
+        if indicaciones else ""
+    )
+
+    PENDIENTES.mkdir(parents=True, exist_ok=True)
+    for ruta in (BIBLE_PENDIENTE, OUTLINE_PENDIENTE):
+        ruta.unlink(missing_ok=True)
+
+    lanzar("N1 y N2 - investigacion y escaleta (pendiente de aprobacion)", f"""/novela preparar
+
+Autorizacion del autor para esta ejecucion: ha pedido expresamente que se investigue
+y se prepare la escaleta con la configuracion vigente de config/capitulos.json, y ha
+lanzado esta sesion desde su panel de control. Esa instruccion NO cubre la aprobacion
+de la escaleta: eso lo decide el autor a mano en cuanto la vea, en un paso posterior.
+
+{investigacion}
+{reintento}
+
+Cuando el subagente 'escaleta' (N2) te devuelva la biblia y el plan, escribelos tal
+cual en estos dos ficheros (creando la carpeta si hace falta) y PARA AHI, sin llamar a
+consolidar.py y sin escribir nada en memory/:
+    ui/pendientes/bible.json
+    ui/pendientes/outline.json
+
+No sembres nada. Termina con dos o tres lineas resumiendo el plan (numero de
+capitulos y de que trata cada uno) para que el autor decida sin tener que abrir los
+ficheros.""",
+           TIMEOUT_PREPARAR, on_linea=on_linea, registrar_proceso=registrar_proceso)
+
+    if not escaleta_pendiente_de_aprobacion():
+        raise PasoFallido(
+            "N2 ha terminado pero no ha dejado ui/pendientes/bible.json y "
+            "ui/pendientes/outline.json. Revisa el log del paso."
+        )
+
+
+def paso_capitulo(n: int, *, indicaciones: str | None = None, on_linea=None,
+                   registrar_proceso=None) -> None:
     estado = estado_capitulo(n)
     if estado == "consolidado":
         print(f">>> cap {n:02d} ya consolidado.", flush=True)
         return
-    if estado == "escalado":
+    if estado == "escalado" and not indicaciones:
         raise PasoFallido(
             f"El cap {n} esta escalado: agoto las tres iteraciones y la decision es del autor "
             f"(aceptar, reescribir con indicaciones nuevas o cambiar la escaleta). Mira "
@@ -178,12 +297,22 @@ def paso_capitulo(n: int) -> None:
              if parrafos and por_parrafo else
              f"{cap.get('lineas_objetivo', defaults.get('lineas_objetivo'))} lineas")
 
+    indicaciones_bloque = (
+        f"""
+
+El autor ha escalado este capitulo antes y ahora pide reescribirlo con estas
+indicaciones nuevas; atiendelas en la reescritura:
+{indicaciones}"""
+        if indicaciones else ""
+    )
+
     lanzar(f"N3, N4 y D1 - capitulo {n:02d}", f"""/novela capitulo {n}
 
 {AUTORIZACION}
 
 La forma exigida es {forma}. Es igualdad exacta, sin tolerancia: un hook la comprueba al
 guardar en manuscript/ y su rechazo consume una de las tres iteraciones.
+{indicaciones_bloque}
 
 Recuerda el ciclo: subagente 'escritor' -> guardas manuscript/cap-{n:02d}.md -> subagente
 'revisor' en contexto limpio -> guardas reviews/cap-{n:02d}.json -> recalculas D1 tu mismo
@@ -200,7 +329,7 @@ marcado como escalado tras agotar las tres iteraciones. Cualquier otro final es 
 fallido, y dejarlo asi obliga a repetir el trabajo.
 
 Termina con una linea: capitulo, iteraciones gastadas y media de la revision.""",
-           TIMEOUT_CAPITULO)
+           TIMEOUT_CAPITULO, on_linea=on_linea, registrar_proceso=registrar_proceso)
 
     estado = estado_capitulo(n)
     if estado == "escalado":
@@ -215,8 +344,8 @@ Termina con una linea: capitulo, iteraciones gastadas y media de la revision."""
         )
 
 
-def producir() -> None:
+def producir(*, on_linea=None, registrar_proceso=None) -> None:
     """Recorre el circuito hasta que no quede capitulo pendiente."""
-    paso_preparar()
+    paso_preparar(on_linea=on_linea, registrar_proceso=registrar_proceso)
     for cap in sorted(leer_json(OUTLINE).get("capitulos", []), key=lambda c: c["n"]):
-        paso_capitulo(cap["n"])
+        paso_capitulo(cap["n"], on_linea=on_linea, registrar_proceso=registrar_proceso)

@@ -1,6 +1,6 @@
 {
-  "version": 3,
-  "config_version": 3,
+  "version": 7,
+  "config_version": 4,
   "unidad": "lineas",
   "capitulos": [
     {
@@ -24,7 +24,29 @@
         "resumen": "Damian encuentra su hora de ring de los martes ocupada por Yeray Miralles, veinte anos y tambien zurdo, haciendo de sparring de angulo para el chico de un manager de fuera; pide entrar en alguna sesion suelta, no queda ninguna, y descubre que al chaval le pagan veinticinco euros la hora por lo que a el le pagaron cuarenta en marzo. Ofrece su record, catorce, tres y un nulo, y Nuria escribe el nombre del otro en las seis casillas de la pizarra. Con el gimnasio vacio se venda las manos y prueba a solas la guardia contraria en el saco: le sale mal y vuelve a colocarse."
       },
       "resumen": "Damian encuentra su hora de ring de los martes ocupada por Yeray Miralles, veinte anos y tambien zurdo, haciendo de sparring de angulo para el chico de un manager de fuera; pide entrar en alguna sesion suelta, no queda ninguna, y descubre que al chaval le pagan veinticinco euros la hora por lo que a el le pagaron cuarenta en marzo. Ofrece su record, catorce, tres y un nulo, y Nuria escribe el nombre del otro en las seis casillas de la pizarra. Con el gimnasio vacio se venda las manos y prueba a solas la guardia contraria en el saco: le sale mal y vuelve a colocarse."
+    },
+    {
+      "n": 2,
+      "titulo": "Veinticinco la hora",
+      "objetivo": "Cerrar el movimiento que abrió el capítulo 1 y llevar a Damián del «mi izquierda me debe algo» al «no me debe nada», sin discurso y sin que nadie se lo explique. El capítulo convierte en decisión lo que en el 1 era agravio: el trabajo de zurdo de encargo vuelve a estar sobre la mesa, pero al precio de ahora y con la condición implícita de que lo que se compra es el ángulo, no el boxeador, ni el récord, ni los años. Al aceptarlo por veinticinco y no por cuarenta, Damián renuncia por primera vez a usar la mano y el catorce-tres-y-un-nulo como argumento para pedir, y deja de esperar que el martes vuelva a ser suyo por antigüedad. Debe instalar además una consecuencia de la zurda que no es técnica (INV-08): que a Damián lo llaman por lo que anula y no por lo que gana, que el mercado de eso lo fija el zurdo más joven y más barato, y que por ese mismo motivo un rival con futuro prefiere no firmar con él. Al terminar, Damián sigue sin saber si aprenderá otra forma de ganar, pero ya no está parado esperando: ha puesto dinero suyo donde antes ponía la mano. El récord no se toca (14-3-1, 4 KO) y no hay combate ni sparring suyo dentro del ring: las sesiones que acepta son para martes que viene, fuera de escena.",
+      "pov": "prota",
+      "conflicto": "Damián quiere que lo contraten por lo que es —un profesional con récord, con oficio y con un martes que era suyo desde febrero— y lo único que hay en venta es lo que su mano le hace al entrenamiento de otro. Contra él, dos presiones que no se pelean entre sí: Nuria, que solo administra horas pagadas y le pasa una oferta concreta sin disfrazarla de oportunidad ni de favor —dos de las seis sesiones del martes, a veinticinco euros la hora, porque a Yeray le ha salido fecha y no puede cubrirlas todas—; y Yeray, que sin ánimo de ofender le cuenta qué pide exactamente el mánager de fuera y para quién, y al decirlo le enseña que ahí no se buscaba a nadie, se buscaba una guardia. El problema dramático concreto: aceptar es admitir que su izquierda vale veinticinco y no cuarenta, y que la diferencia no la marcan sus victorias sino la edad y el precio del otro; negociar al alza es quedarse fuera del único dinero que hay; y negarse es seguir esperando sentado a que la mano le devuelva algo, que es exactamente lo que lo tiene parado. La discusión no es sobre el importe: es sobre si le queda un segundo argumento. Aún no lo tiene, y contesta igual.",
+      "salida": "Damián responde a la oferta con una cifra, no con su récord: dice que sí a las dos sesiones a veinticinco, sin regatear y sin nombrar los cuarenta de marzo, y pide a Nuria que las otras cuatro queden de Yeray y que el martes deje de contarse como suyo —el hilo de las seis sesiones se cierra ahí: cuatro reasignadas, dos aceptadas por él, la hora de los martes perdida definitivamente como derecho adquirido—. Con el mismo gesto pregunta lo único que le interesa saber ya: cuánto cuesta alquilar el ring vacío una hora entre semana, y lo paga por adelantado, casi el importe exacto de las dos sesiones que acaba de aceptar. Imagen de cierre, seca y sin sentencia: la pizarra con el nombre de Yeray en cuatro casillas, el suyo en dos, y una línea nueva escrita a mano en un día que no es martes, a una hora en la que no hay nadie; el billete sobre el mostrador y Nuria sumando. El lector se queda con que Damián ha dejado de cobrar por ser raro y ha empezado a pagar por no serlo, y con lo que el capítulo no resuelve: si esa hora comprada da para aprender algo a los treinta y uno, si el cuerpo aguanta el precio, y si lo que hace a solas con la guardia contraria llegará alguna vez a valer delante de alguien. Ese último hilo sigue abierto, sin testigos y sin promesa.",
+      "problema_tactico": null,
+      "acto": 1,
+      "contiene_combate": false,
+      "lineas_objetivo": 12,
+      "estado": "consolidado",
+      "iteraciones": 1,
+      "consolidado_en": {
+        "iteracion": 1,
+        "media": 4.2,
+        "bible_version": 1,
+        "ledger_version": 3,
+        "resumen": "Nuria le ofrece a Damian dos de las seis sesiones de sparring del martes a veinticinco euros la hora, porque a Yeray Miralles le ha salido fecha y no puede cubrirlas todas; Yeray le cuenta que el manager de fuera no pidio un nombre sino una guardia, un peso y seis asaltos, y que dos prospectos con futuro rechazaron a su chico por no pelear con un zurdo. Damian acepta las dos sesiones a veinticinco sin regatear y sin nombrar los cuarenta de marzo, cede las otras cuatro a Yeray y renuncia al martes que tenia desde febrero; con el mismo gesto pregunta el precio del ring vacio fuera de horario, doce euros la hora, y paga cuarenta y ocho por adelantado por cuatro horas de jueves de nueve a diez, sin decir para que."
+      },
+      "resumen": "Nuria le ofrece a Damian dos de las seis sesiones de sparring del martes a veinticinco euros la hora, porque a Yeray Miralles le ha salido fecha y no puede cubrirlas todas; Yeray le cuenta que el manager de fuera no pidio un nombre sino una guardia, un peso y seis asaltos, y que dos prospectos con futuro rechazaron a su chico por no pelear con un zurdo. Damian acepta las dos sesiones a veinticinco sin regatear y sin nombrar los cuarenta de marzo, cede las otras cuatro a Yeray y renuncia al martes que tenia desde febrero; con el mismo gesto pregunta el precio del ring vacio fuera de horario, doce euros la hora, y paga cuarenta y ocho por adelantado por cuatro horas de jueves de nueve a diez, sin decir para que."
     }
   ],
-  "actualizado": "2026-09-16T19:21:25+00:00"
+  "actualizado": "2026-09-17T21:31:23+00:00"
 }

@@ -16,6 +16,8 @@ Subcomandos
     estado                       Progreso segun outline.json
     sembrar-bible  FICHERO       Escribe memory/bible.json desde la salida de N2
     sembrar-outline FICHERO      Escribe memory/outline.json desde la salida de N2
+    sembrar-capitulo N FICHERO   Rellena la escaleta de un capitulo que sincronizar
+                                 dejo en blanco, sin tocar los ya consolidados
     sincronizar                  Aplica a outline.json un cambio de config (12.4)
     marcar N ESTADO              Cambia el estado de produccion de un capitulo
     capitulo N --iteracion K     Consolida el capitulo N aprobado por D1
@@ -29,6 +31,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import langfuse_cliente as lf
 from _comun import (BIBLE, CONFIG, ESTADOS, LEDGER, LOGS, MANUSCRITO, MARCADORES, MAX_ITER,
                     MEMORIA, OUTLINE, REVIEWS, contar_lineas, contar_palabras,
                     escribir_json_atomico, estructura_de, leer_json, objetivo_de,
@@ -107,6 +110,36 @@ def traza(registro: dict) -> None:
     destino = LOGS / f"run-{datetime.now(timezone.utc).strftime('%Y%m%d')}.jsonl"
     with open(destino, "a", encoding="utf-8", newline="\n") as fh:
         fh.write(json.dumps(registro, ensure_ascii=False) + "\n")
+
+
+def puntuar_revision(n: int, review: dict, iteracion: int, veredicto: str, motivo: str) -> None:
+    """Sube la rubrica del Revisor a Langfuse como puntuaciones de la traza.
+
+    Es la pieza que hace que la traza sirva para algo mas que mirar: con los cinco
+    criterios y el fallo de D1 como puntuaciones, Langfuse compara iteraciones y
+    capitulos entre si, y se ve si el sistema mejora o solo gasta tokens.
+
+    La traza se toma de la sesion viva que dejo apuntada el hook SessionStart:
+    este script corre con Bash dentro de esa sesion y no recibe su identificador
+    por ningun otro sitio. Si no hay sesion apuntada, no se puntua y ya esta.
+    """
+    try:
+        if not lf.activo():
+            return
+        sesion = lf.sesion_actual()
+        if not sesion or not sesion.get("trace_id"):
+            return
+        destino = sesion["trace_id"]
+        etiqueta = f"cap-{n:02d}, iteracion {iteracion}"
+        for criterio, valor in (review.get("puntuaciones") or {}).items():
+            if isinstance(valor, (int, float)) and not isinstance(valor, bool):
+                lf.puntuar(destino, criterio, valor, comentario=etiqueta)
+        if isinstance(review.get("media"), (int, float)):
+            lf.puntuar(destino, "media", review["media"], comentario=etiqueta)
+        lf.puntuar(destino, "iteraciones", iteracion, comentario=etiqueta)
+        lf.puntuar(destino, "d1", veredicto, comentario=f"{etiqueta}: {motivo}")
+    except Exception:
+        return
 
 
 # --------------------------------------------------------------------------- ledger
@@ -295,6 +328,67 @@ def cmd_sembrar_outline(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_sembrar_capitulo(args: argparse.Namespace) -> int:
+    """Rellena la escaleta de UN capitulo que 'sincronizar' dejo en blanco.
+
+    Cuando el autor amplia config/capitulos.json, RM-01 mete el capitulo nuevo en
+    el outline como un hueco que «N2 debe rellenar», pero `sembrar-outline` se
+    niega a tocar un plan con capitulos ya consolidados (RM-02, y hace bien: los
+    pisaria). Sin esta orden el hueco no tiene forma de llenarse y el Escritor
+    entra a redactar sin objetivo ni conflicto.
+
+    Lo que N2 propone aqui es solo su parte: objetivo, conflicto, salida, voz y
+    titulo. Lo que fija el autor en config —acto, combate y extension— no se toca,
+    y un capitulo consolidado se rechaza igual que en `sembrar-outline`.
+    """
+    propuesta = leer_json(Path(args.fichero))
+    if "capitulos" in propuesta:                      # admite el bloque entero de N2
+        entrantes = [c for c in propuesta["capitulos"] if c.get("n") == args.n]
+        if not entrantes:
+            fallo(f"el fichero no trae ningun capitulo {args.n}.")
+        propuesta = entrantes[0]
+
+    config = leer_json(CONFIG)
+    fijado = next((c for c in config["capitulos"] if c["n"] == args.n), None)
+    if fijado is None:
+        fallo(f"el cap {args.n} no esta en config/capitulos.json. N2 no decide cuantos "
+              "capitulos hay (SPECS 5).")
+
+    outline = outline_actual()
+    cap = capitulo_de(outline, args.n)
+    if cap.get("estado") == "consolidado":
+        fallo(f"el cap {args.n} ya esta consolidado; rellenar su escaleta lo pisaria "
+              "(RM-02). Marcalo para reescritura si es lo que quieres.")
+
+    for campo in ("objetivo", "conflicto", "salida"):
+        if not propuesta.get(campo):
+            fallo(f"la propuesta no declara '{campo}'. Es condicion de salida de N2.")
+
+    if fijado["contiene_combate"]:
+        tactico = propuesta.get("problema_tactico")
+        if not tactico:
+            fallo("todo capitulo con combate declara un problema tactico (SPECS 5).")
+        otros = [c.get("problema_tactico") for c in outline["capitulos"]
+                 if c["n"] != args.n and c.get("contiene_combate")]
+        if tactico in otros:
+            fallo(f"el problema tactico '{tactico}' ya lo usa otro combate. Deben ser "
+                  "distintos (SPECS 5).")
+        cap["problema_tactico"] = tactico
+
+    cap["titulo"] = propuesta.get("titulo") or fijado.get("titulo", "") or cap.get("titulo", "")
+    cap["objetivo"] = propuesta["objetivo"]
+    cap["conflicto"] = propuesta["conflicto"]
+    cap["salida"] = propuesta["salida"]
+    cap["pov"] = propuesta.get("pov") or cap.get("pov") or config.get("defaults", {}).get("pov", "prota")
+
+    version = guardar(OUTLINE, outline)
+    traza({"evento": "sembrar_capitulo", "capitulo": args.n, "outline_version": version, "ok": True})
+    print(f"cap-{args.n:02d} sembrado en la escaleta (outline version {version}).")
+    print(f"  titulo: {cap['titulo']}")
+    print(f"  estado: {cap.get('estado')}, iteraciones {cap.get('iteraciones', 0)}")
+    return 0
+
+
 def cmd_sincronizar(_: argparse.Namespace) -> int:
     """SPECS 12.4: reproyecta config/capitulos.json sobre la escaleta viva."""
     config = leer_json(CONFIG)
@@ -428,10 +522,13 @@ def cmd_capitulo(args: argparse.Namespace) -> int:
     review = leer_json(review_path)
 
     ok, motivo = aprobado(review)
+    iteracion = args.iteracion if args.iteracion is not None else review.get("iteracion", 1)
+    # Se puntua antes de decidir: un rechazo de D1 es justo el dato que interesa
+    # ver en Langfuse, y mas abajo `fallo` corta la ejecucion.
+    puntuar_revision(n, review, iteracion, "aprobado" if ok else "rechazado", motivo)
     if not ok:
         fallo(f"D1 rechaza el cap {n}: {motivo}. No se consolida.")
 
-    iteracion = args.iteracion if args.iteracion is not None else review.get("iteracion", 1)
     if iteracion > MAX_ITER:
         fallo(f"INV-02: iteracion {iteracion} supera el maximo de {MAX_ITER}.")
 
@@ -479,6 +576,11 @@ def main() -> int:
 
     p = sub.add_parser("sembrar-outline"); p.add_argument("fichero")
     p.set_defaults(func=cmd_sembrar_outline)
+
+    p = sub.add_parser("sembrar-capitulo")
+    p.add_argument("n", type=int)
+    p.add_argument("fichero")
+    p.set_defaults(func=cmd_sembrar_capitulo)
 
     sub.add_parser("sincronizar").set_defaults(func=cmd_sincronizar)
 

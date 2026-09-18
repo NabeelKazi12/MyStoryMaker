@@ -10,6 +10,13 @@ dist/*
 
 # Trazas de ejecucion
 logs/*.jsonl
+logs/.langfuse-*.json
 
 # Temporales de la escritura atomica
 memory/.*.tmp
+
+# Panel de control (ui/server.py): plan de N2 a la espera de aprobacion y
+# estado local de la UI (aprobacion del manuscrito). Nada de esto es memory/,
+# pero tampoco es material de la novela.
+ui/pendientes/
+ui/estado_ui.json
