@@ -48,6 +48,13 @@ para lanzar cada paso como un job en segundo plano con log en vivo, y pantallas
 para decidir en los cuatro puntos que son del autor (brief incompleto, escaleta,
 capítulo escalado y manuscrito final).
 
+Desde ahí se **añade un capítulo al plan** sin abrir `config/capitulos.json`: la
+forma la escribes tú —líneas, párrafos, si lleva combate—, y el panel valida el
+plan resultante, reproyecta la escaleta y lanza N2 para la ficha del capítulo
+nuevo sin tocar los consolidados. Y **«Leer la novela»** abre lo consolidado
+seguido, con tipografía de libro, sangría francesa y cuerpo ajustable; no espera
+a que N5 compile, porque leer lo que hay es útil mucho antes de eso.
+
 ```
 pip install -r requirements.txt
 python ui/server.py

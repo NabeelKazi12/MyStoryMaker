@@ -169,6 +169,17 @@ def estado_capitulo(n: int) -> str:
     return "ausente"
 
 
+CAMPOS_FICHA = ("objetivo", "conflicto", "salida")
+
+
+def ficha_incompleta(n: int) -> bool:
+    """Un capitulo que 'sincronizar' anadio y N2 todavia no ha rellenado (RM-01)."""
+    for cap in leer_json(OUTLINE).get("capitulos", []):
+        if cap.get("n") == n:
+            return not all(str(cap.get(k) or "").strip() for k in CAMPOS_FICHA)
+    return False
+
+
 def paso_preparar(*, on_linea=None, registrar_proceso=None) -> None:
     if escaleta_sembrada():
         print(">>> N1 y N2 ya estan hechos: escaleta sembrada.", flush=True)
@@ -276,6 +287,51 @@ ficheros.""",
         )
 
 
+def paso_ficha(n: int, *, on_linea=None, registrar_proceso=None) -> None:
+    """N2 para un solo capitulo: rellena la ficha que 'sincronizar' dejo en blanco.
+
+    Cuando el autor anade un capitulo a mitad de produccion, RM-01 lo mete en la
+    escaleta como pendiente pero sin objetivo, conflicto ni salida. Mandarlo a N3
+    asi no falla: produce un capitulo escrito a ciegas y se descubre una iteracion
+    despues, que es la forma cara de enterarse. Este paso es el puente, y existe
+    aparte de `paso_preparar` porque rehacer la escaleta entera para rellenar un
+    hueco pisaria lo ya consolidado.
+    """
+    if estado_capitulo(n) == "ausente":
+        raise PasoFallido(
+            f"El cap {n} no esta en memory/outline.json. Anadelo a config/capitulos.json y "
+            "sincroniza antes de pedir su ficha."
+        )
+    if not ficha_incompleta(n):
+        print(f">>> cap {n:02d} ya tiene ficha.", flush=True)
+        return
+
+    lanzar(f"N2 - ficha del capitulo {n:02d}", f"""/novela sincronizar
+
+{AUTORIZACION}
+
+El autor ha anadido el capitulo {n} a config/capitulos.json y ya se ha ejecutado
+'consolidar.py sincronizar': el cap {n} esta en outline.json como pendiente pero con la
+ficha en blanco.
+
+Tu unico trabajo en este paso es rellenar esa ficha con N2 y persistirla. Lanza el
+subagente 'escaleta' pidiendole SOLO la ficha del capitulo {n} -objetivo, pov, conflicto,
+salida, y el problema tactico si el capitulo lleva combate-, coherente con lo ya
+consolidado y con los hilos que el ledger da por abiertos. Que NO toque la biblia ni las
+fichas de los capitulos consolidados. Guarda su ficha en un fichero temporal y ejecuta
+'python scripts/consolidar.py sembrar-capitulo {n} <fichero>'.
+
+No escribas el capitulo {n} en este paso. Termina cuando 'python scripts/consolidar.py
+estado --json' deje de listar el {n} en 'sin_ficha'.
+""", TIMEOUT_PREPARAR, on_linea=on_linea, registrar_proceso=registrar_proceso)
+
+    if ficha_incompleta(n):
+        raise PasoFallido(
+            f"El paso ha terminado y la ficha del cap {n} sigue incompleta. Revisa la salida: "
+            "sin objetivo, conflicto y salida no se lanza N3."
+        )
+
+
 def paso_capitulo(n: int, *, indicaciones: str | None = None, on_linea=None,
                    registrar_proceso=None) -> None:
     estado = estado_capitulo(n)
@@ -287,6 +343,12 @@ def paso_capitulo(n: int, *, indicaciones: str | None = None, on_linea=None,
             f"El cap {n} esta escalado: agoto las tres iteraciones y la decision es del autor "
             f"(aceptar, reescribir con indicaciones nuevas o cambiar la escaleta). Mira "
             f"manuscript/cap-{n:02d}.md y reviews/cap-{n:02d}.json."
+        )
+    if ficha_incompleta(n):
+        raise PasoFallido(
+            f"La ficha del cap {n} esta en blanco: la anadio 'sincronizar' y N2 no la ha "
+            "rellenado todavia. Ejecuta antes el paso de ficha; sin objetivo, conflicto y "
+            "salida el Escritor trabajaria a ciegas."
         )
 
     config = leer_json(CONFIG)

@@ -16,6 +16,10 @@ logs/.langfuse-*.json
 # derivado: se regenera de memory/ y config/ cuando haga falta.
 .contexto/
 
+# Cada version de un capitulo y de su revision segun se escriben, para poder
+# comparar iteraciones en el panel. Derivado y ruidoso; la novela esta en git.
+.iteraciones/
+
 # Temporales de la escritura atomica
 memory/.*.tmp
 

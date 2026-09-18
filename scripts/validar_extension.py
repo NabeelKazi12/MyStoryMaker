@@ -14,18 +14,63 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _comun import (CONFIG, MANUSCRITO, MARCADORES, bajo, bloquear, contar_lineas,
-                    contar_palabras, cuerpo_capitulo, estructura_de, leer_evento_hook,
-                    leer_json, objetivo_de, parrafos_capitulo, ruta_afectada)
+from datetime import datetime, timezone
+
+from _comun import (CONFIG, ITERACIONES, MANUSCRITO, MARCADORES, REVIEWS, bajo, bloquear,
+                    contar_lineas, contar_palabras, cuerpo_capitulo, estructura_de,
+                    leer_evento_hook, leer_json, objetivo_de, parrafos_capitulo,
+                    ruta_afectada)
 
 PATRON = re.compile(r"^cap-(\d{2,})\.md$")
+PATRON_REVIEW = re.compile(r"^cap-(\d{2,})\.json$")
+
+
+def archivar(ruta: Path) -> None:
+    """Guarda una copia de lo que se acaba de escribir, antes de juzgarlo.
+
+    `manuscript/cap-NN.md` y `reviews/cap-NN.json` se sobrescriben en cada
+    iteracion, asi que hasta ahora la unica version que sobrevivia era la ultima:
+    comparar la iteracion 1 con la 2 era imposible porque la 1 ya no existia en
+    ninguna parte. Aqui se apila cada version segun se escribe, incluidas las que
+    este mismo hook va a rechazar a continuacion -que son justamente las que
+    explican por que hubo una segunda-.
+
+    Es material derivado y ruidoso, asi que vive fuera de git. Y no puede hacer
+    fallar el hook: si archivar no funciona, la condicion de salida de N3 sigue
+    siendo la que es.
+    """
+    try:
+        nombre = ruta.name
+        casa = PATRON.match(nombre) or PATRON_REVIEW.match(nombre)
+        if not casa:
+            return
+        tipo = "texto" if nombre.endswith(".md") else "review"
+        destino = ITERACIONES / f"cap-{int(casa.group(1)):02d}"
+        destino.mkdir(parents=True, exist_ok=True)
+        marca = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        copia = destino / f"{marca}-{tipo}{ruta.suffix}"
+        contenido = ruta.read_bytes()
+        # Sin duplicados: reguardar un fichero identico al anterior solo ensucia
+        # la comparacion con versiones que no cambiaron nada.
+        previas = sorted(destino.glob(f"*-{tipo}{ruta.suffix}"))
+        if previas and previas[-1].read_bytes() == contenido:
+            return
+        copia.write_bytes(contenido)
+    except Exception:
+        pass
 
 
 def main() -> int:
     evento = leer_evento_hook()
     ruta = ruta_afectada(evento)
-    if ruta is None or not bajo(ruta, MANUSCRITO):
+    if ruta is None:
         return 0
+    if bajo(ruta, REVIEWS):
+        archivar(Path(ruta))
+        return 0
+    if not bajo(ruta, MANUSCRITO):
+        return 0
+    archivar(Path(ruta))
 
     casa = PATRON.match(Path(ruta).name)
     if not casa:

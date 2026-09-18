@@ -39,6 +39,10 @@ RESEARCH = RAIZ / "research"
 REVIEWS = RAIZ / "reviews"
 LOGS = RAIZ / "logs"
 DIST = RAIZ / "dist"
+# Cada version de un capitulo y de su revision segun se escriben, incluidas las
+# rechazadas. Material derivado y fuera de git: sirve para comparar iteraciones,
+# no para reconstruir la novela, que eso lo hace el historial de commits.
+ITERACIONES = RAIZ / ".iteraciones"
 
 ESTADOS = ("pendiente", "en_revision", "escalado", "consolidado")
 MAX_ITER = 3

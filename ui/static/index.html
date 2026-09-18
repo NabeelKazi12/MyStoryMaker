@@ -10,11 +10,17 @@
   <header>
     <h1>MyStoryMaker</h1>
     <span class="subtitulo" id="subtitulo">cargando…</span>
+    <button class="chico primario" id="btn-leer">Leer la novela</button>
     <div class="badges" id="badges"></div>
   </header>
 
   <main id="main">
     <div id="alertas"></div>
+
+    <section class="tarjeta" id="tarjeta-circuito">
+      <h2>El circuito <span class="tenue" id="circuito-donde"></span></h2>
+      <div id="circuito"></div>
+    </section>
 
     <section class="tarjeta" id="tarjeta-brief">
       <h2>N0 · Brief del autor</h2>
@@ -33,6 +39,7 @@
         <button id="btn-continuar">Continuar (hasta agotar pendientes o escalar)</button>
       </div>
       <div class="capitulos" id="capitulos-lista"></div>
+      <div id="nuevo-capitulo"></div>
     </section>
 
     <section class="tarjeta" id="tarjeta-manuscrito">
@@ -48,13 +55,46 @@
     </section>
   </main>
 
+  <div class="avisos-zona" id="avisos-zona" hidden>
+    <div class="avisos-cabecera">
+      <span class="tenue" id="avisos-cuenta"></span>
+      <button class="chico" id="avisos-limpiar">Limpiar todo</button>
+    </div>
+    <div class="avisos" id="avisos"></div>
+  </div>
+
   <div class="panel-log" id="panel-log">
+    <div class="tirador" id="log-tirador" title="Arrastra para cambiar la altura"></div>
     <div class="cabecera" id="log-cabecera">
       <span class="punto" id="log-punto"></span>
       <strong id="log-titulo">Sin actividad</strong>
+      <span class="pasos" id="log-pasos"></span>
+      <span class="tenue mono" id="log-reloj"></span>
       <button class="chico" id="log-cancelar" hidden>Cancelar</button>
+      <span class="chevron" id="log-chevron">▴</span>
     </div>
     <div class="cuerpo mono" id="log-cuerpo"></div>
+  </div>
+
+  <div class="lector" id="lector" hidden>
+    <div class="lector-progreso"><i id="lector-barra"></i></div>
+    <div class="lector-barra-sup">
+      <button class="chico" id="lector-cerrar">← Volver al panel</button>
+      <button class="chico" id="lector-indice" aria-expanded="false">Índice</button>
+      <span class="tenue" id="lector-estado"></span>
+      <div class="lector-controles">
+        <button class="chico" id="lector-tema" title="Claro / sepia / oscuro">Tema</button>
+        <button class="chico" id="lector-menos" title="Letra más pequeña">A−</button>
+        <button class="chico" id="lector-mas" title="Letra más grande">A+</button>
+      </div>
+    </div>
+    <nav class="lector-toc" id="lector-toc" hidden></nav>
+    <div class="lector-paginas" id="lector-paginas"></div>
+    <div class="lector-pie">
+      <button class="chico" id="lector-anterior">← Anterior</button>
+      <span class="tenue" id="lector-donde"></span>
+      <button class="chico" id="lector-siguiente">Siguiente →</button>
+    </div>
   </div>
 
   <script src="/static/app.js"></script>

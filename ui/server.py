@@ -17,6 +17,7 @@ que existe esta UI.
 """
 from __future__ import annotations
 
+import difflib
 import json
 import re
 import subprocess
@@ -34,10 +35,13 @@ import compilar as compilar_mod  # noqa: E402
 import langfuse_cliente as lf  # noqa: E402
 import pipeline  # noqa: E402
 import resumen_langfuse  # noqa: E402
-from _comun import CONFIG, LEDGER, MANUSCRITO, OUTLINE, REVIEWS, leer_json  # noqa: E402
+import validar_capitulos  # noqa: E402
+from _comun import (BIBLE, CONFIG, ITERACIONES, LEDGER, MANUSCRITO, OUTLINE,  # noqa: E402
+                    REVIEWS,
+                    escribir_json_atomico, leer_json, parrafos_capitulo)
 
 from fastapi import FastAPI, HTTPException  # noqa: E402
-from fastapi.responses import FileResponse  # noqa: E402
+from fastapi.responses import Response  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
@@ -68,11 +72,50 @@ class Job:
         self.cancelado = False
         self.creado = time.time()
         self.terminado: float | None = None
+        self.fase: dict = {"nodo": None, "capitulo": meta.get("n"), "iteracion": None,
+                            "ultimo": None}
         self._lock = threading.Lock()
 
     def linea(self, texto: str) -> None:
         with self._lock:
             self.lineas.append(texto)
+            self._actualizar_fase(texto)
+
+    # El orquestador tiene orden de decir en una linea donde esta tras cada paso
+    # -nodo, capitulo, iteracion-, y esa linea es la unica senal de progreso que
+    # produce una sesion headless. Leerla aqui convierte un log que hay que mirar
+    # en un estado que la pagina puede dibujar.
+    _NODO = re.compile(r"\bN([0-5])\b")
+    _ITER = re.compile(r"iteraci[oó]n\s*:?\s*(\d+)", re.IGNORECASE)
+    _CAP = re.compile(r"cap(?:itulo|ítulo)?\.?\s*0*(\d+)", re.IGNORECASE)
+
+    def _actualizar_fase(self, texto: str) -> None:
+        # Las lineas del lanzador (">>> N3, N4 y D1 - capitulo 03") son el rotulo
+        # del paso, no su progreso: anunciarlas como fase daria por empezado lo
+        # que aun no ha empezado.
+        if texto.startswith(">>>") or texto.startswith("    "):
+            return
+        nodo = self._NODO.search(texto)
+        if nodo:
+            self.fase["nodo"] = f"N{nodo.group(1)}"
+        elif "D1" in texto:
+            self.fase["nodo"] = "D1"
+        iteracion = self._ITER.search(texto)
+        if iteracion:
+            self.fase["iteracion"] = int(iteracion.group(1))
+        capitulo = self._CAP.search(texto)
+        if capitulo:
+            self.fase["capitulo"] = int(capitulo.group(1))
+        # Por raiz y no por palabra entera: el orquestador escribe «rechaza»,
+        # «rechazado» y «ha rechazado» segun le cae la frase, y buscar la forma
+        # exacta dejaba el rotulo clavado en el evento anterior.
+        bajo = texto.lower()
+        for raiz, etiqueta in (("consolidad", "consolidado"), ("escalad", "escalado"),
+                                ("rechaz", "rechazado"), ("aprob", "aprobado"),
+                                ("reparaci", "reparación")):
+            if raiz in bajo:
+                self.fase["ultimo"] = etiqueta
+                break
 
     def registrar_proceso(self, proceso) -> None:
         with self._lock:
@@ -93,12 +136,13 @@ class Job:
                 "estado": self.estado, "error": self.error,
                 "lineas": list(self.lineas[desde:]), "total": len(self.lineas),
                 "creado": self.creado, "terminado": self.terminado,
+                "fase": dict(self.fase),
             }
 
 
 JOBS: dict[str, Job] = {}
 JOBS_LOCK = threading.Lock()
-CLASES_ACTIVAS = {"preparar", "capitulo", "continuar"}
+CLASES_ACTIVAS = {"preparar", "capitulo", "continuar", "nuevo_capitulo"}
 
 
 def job_activo() -> Job | None:
@@ -214,6 +258,10 @@ def construir_capitulos() -> list[dict]:
             "contiene_combate": cap.get("contiene_combate", fijado.get("contiene_combate", False)),
             "media": (review or {}).get("media"),
             "manuscrito_existe": (MANUSCRITO / f"cap-{n:02d}.md").exists(),
+            # Un capitulo recien anadido esta en la escaleta pero sin ficha: la UI
+            # tiene que poder distinguirlo de uno pendiente de verdad.
+            "ficha_completa": bool(cap) and all(
+                str(cap.get(k) or "").strip() for k in ("objetivo", "conflicto", "salida")),
         })
     return resultado
 
@@ -242,6 +290,7 @@ def api_estado() -> dict:
         "titulo": config.get("titulo_trabajo", ""),
         "config_version": config.get("version"),
         "brief": parsear_brief(),
+        "investigacion": pipeline.hay_investigacion(),
         "escaleta": {
             "sembrada": pipeline.escaleta_sembrada(),
             "pendiente_aprobacion": pipeline.escaleta_pendiente_de_aprobacion(),
@@ -257,7 +306,8 @@ def api_estado() -> dict:
             "motivo_rechazo": leer_estado_ui().get("manuscrito_motivo_rechazo"),
         },
         "langfuse": construir_langfuse(),
-        "job_activo": None if job is None else {"id": job.id, "kind": job.kind, "meta": job.meta},
+        "job_activo": None if job is None else {"id": job.id, "kind": job.kind,
+                                                 "meta": job.meta, "fase": dict(job.fase)},
     }
 
 
@@ -338,7 +388,75 @@ def api_capitulo_detalle(n: int) -> dict:
         "ficha": cap,
         "texto": texto_path.read_text(encoding="utf-8") if texto_path.exists() else None,
         "review": leer_json(review_path) if review_path.exists() else None,
+        "versiones": versiones_de(n),
     }
+
+
+def versiones_de(n: int) -> list[dict]:
+    """Las versiones archivadas de un capitulo, de la mas antigua a la mas nueva.
+
+    Las apila el hook `validar_extension.py` segun se escriben, rechazadas
+    incluidas. Si el directorio no existe es que el capitulo se produjo antes de
+    que el harness archivara nada, y eso hay que decirlo en vez de fingir que no
+    hubo iteraciones.
+    """
+    carpeta = ITERACIONES / f"cap-{n:02d}"
+    if not carpeta.is_dir():
+        return []
+    versiones = []
+    for ruta in sorted(carpeta.iterdir()):
+        partes = ruta.stem.split("-", 1)
+        if len(partes) != 2:
+            continue
+        marca, tipo = partes
+        versiones.append({
+            "id": ruta.name, "marca": marca, "tipo": tipo,
+            "cuando": datetime.strptime(marca, "%Y%m%dT%H%M%S")
+                              .replace(tzinfo=timezone.utc).isoformat(),
+            "bytes": ruta.stat().st_size,
+        })
+    return versiones
+
+
+def ruta_version(n: int, id_: str) -> Path:
+    carpeta = (ITERACIONES / f"cap-{n:02d}").resolve()
+    ruta = (carpeta / id_).resolve()
+    # El id llega del navegador: sin esta comprobacion, un '../..' leeria
+    # cualquier fichero de la maquina a traves de la API.
+    if not str(ruta).startswith(str(carpeta)) or not ruta.is_file():
+        raise HTTPException(404, "Esa version no existe.")
+    return ruta
+
+
+@app.get("/api/capitulos/{n}/versiones")
+def api_capitulo_versiones(n: int) -> dict:
+    return {"versiones": versiones_de(n)}
+
+
+@app.get("/api/capitulos/{n}/version/{id_}")
+def api_capitulo_version(n: int, id_: str) -> dict:
+    return {"id": id_, "contenido": ruta_version(n, id_).read_text(encoding="utf-8")}
+
+
+@app.get("/api/capitulos/{n}/diff")
+def api_capitulo_diff(n: int, a: str, b: str) -> dict:
+    """Diff por lineas entre dos versiones archivadas del mismo capitulo.
+
+    Se calcula aqui y no en el navegador para no arrastrar una libreria de diff
+    al front por algo que la biblioteca estandar ya hace bien.
+    """
+    texto_a = ruta_version(n, a).read_text(encoding="utf-8").splitlines()
+    texto_b = ruta_version(n, b).read_text(encoding="utf-8").splitlines()
+    filas = []
+    for linea in difflib.unified_diff(texto_a, texto_b, lineterm="", n=3):
+        if linea.startswith("+++") or linea.startswith("---"):
+            continue
+        clase = ("cabecera" if linea.startswith("@@")
+                 else "mas" if linea.startswith("+")
+                 else "menos" if linea.startswith("-") else "igual")
+        filas.append({"clase": clase, "texto": linea})
+    iguales = texto_a == texto_b
+    return {"a": a, "b": b, "iguales": iguales, "filas": filas}
 
 
 @app.post("/api/capitulos/{n}/lanzar")
@@ -396,6 +514,155 @@ def api_continuar() -> dict:
 
     job = lanzar_job("continuar", {}, tarea)
     return {"job_id": job.id}
+
+
+class NuevoCapituloBody(BaseModel):
+    """La forma del capitulo nuevo. Todo viene del autor: el sistema no la inventa."""
+    lineas_objetivo: int
+    parrafos_objetivo: int | None = None
+    lineas_por_parrafo: int | None = None
+    contiene_combate: bool = False
+    acto: int = 1
+    producir: bool = False
+
+
+@app.post("/api/capitulos/nuevo")
+def api_capitulo_nuevo(body: NuevoCapituloBody) -> dict:
+    """Anade un capitulo al plan y lo deja listo para producir.
+
+    `config/capitulos.json` es del autor (INV-03) y un hook deniega que ningun
+    agente lo edite. Esta ruta no rompe eso: la UI *es* la mano del autor, y por
+    eso la forma del capitulo -cuantas lineas, en cuantos parrafos, si lleva
+    combate- llega entera desde el formulario y aqui no se rellena ningun hueco
+    con un valor por defecto inventado.
+
+    Son tres pasos encadenados porque separarlos deja el plan a medias: se
+    escribe el plan, se reproyecta sobre la escaleta viva (RM-01 mete el
+    capitulo como pendiente con la ficha en blanco) y se lanza N2 para esa ficha.
+    """
+    if not pipeline.escaleta_sembrada():
+        raise HTTPException(400, "La escaleta no esta sembrada: prepara N1 y N2 antes de anadir "
+                                 "capitulos sueltos.")
+    if pipeline.escaleta_pendiente_de_aprobacion():
+        raise HTTPException(400, "Hay un plan de escaleta pendiente de aprobacion; resuelvelo antes.")
+    if body.lineas_objetivo < 1:
+        raise HTTPException(400, "lineas_objetivo tiene que ser al menos 1.")
+    if bool(body.parrafos_objetivo) != bool(body.lineas_por_parrafo):
+        raise HTTPException(400, "El reparto en parrafos se declara entero o no se declara: "
+                                 "parrafos_objetivo y lineas_por_parrafo van juntos.")
+    if body.parrafos_objetivo and body.parrafos_objetivo * body.lineas_por_parrafo != body.lineas_objetivo:
+        raise HTTPException(
+            400, f"El reparto no cuadra: {body.parrafos_objetivo} x {body.lineas_por_parrafo} = "
+                 f"{body.parrafos_objetivo * body.lineas_por_parrafo}, y has pedido "
+                 f"{body.lineas_objetivo} lineas."
+        )
+    exigir_libre()
+
+    config = leer_json(CONFIG)
+    if config.get("extension", {}).get("unidad") != "lineas":
+        raise HTTPException(400, "Esta pantalla solo sabe anadir capitulos en la unidad 'lineas'. "
+                                 "Edita config/capitulos.json a mano para otras unidades.")
+    n = max((c["n"] for c in config["capitulos"]), default=0) + 1
+    nuevo = {
+        "n": n, "acto": body.acto, "lineas_objetivo": body.lineas_objetivo,
+        "contiene_combate": body.contiene_combate,
+    }
+    if body.parrafos_objetivo:
+        nuevo["parrafos_objetivo"] = body.parrafos_objetivo
+        nuevo["lineas_por_parrafo"] = body.lineas_por_parrafo
+
+    propuesta = json.loads(json.dumps(config))          # no tocar el plan vigente si no valida
+    propuesta["capitulos"].append(nuevo)
+    propuesta["extension"]["lineas_totales_objetivo"] = sum(
+        c["lineas_objetivo"] for c in propuesta["capitulos"])
+    propuesta["version"] = int(propuesta.get("version", 0)) + 1
+
+    errores = validar_capitulos.validar(propuesta)
+    if errores:
+        raise HTTPException(400, "El plan resultante no valida (RM-03):\n" + "\n".join(errores))
+    escribir_json_atomico(CONFIG, propuesta)
+
+    ok, salida = ejecutar_consolidar("sincronizar")
+    if not ok:
+        raise HTTPException(500, f"El capitulo {n} se anadio al plan pero 'sincronizar' ha "
+                                 f"fallado; la escaleta se ha quedado atras:\n{salida}")
+
+    def tarea(job: Job) -> None:
+        pipeline.paso_ficha(n, on_linea=job.linea, registrar_proceso=job.registrar_proceso)
+        if body.producir:
+            pipeline.paso_capitulo(n, on_linea=job.linea, registrar_proceso=job.registrar_proceso)
+
+    job = lanzar_job("nuevo_capitulo", {"n": n, "producir": body.producir}, tarea)
+    return {"job_id": job.id, "n": n, "config_version": propuesta["version"], "sincronizar": salida}
+
+
+@app.post("/api/capitulos/{n}/ficha")
+def api_capitulo_ficha(n: int) -> dict:
+    """Relanza N2 para una ficha que quedo en blanco (o cuyo paso fallo a medias)."""
+    if not pipeline.ficha_incompleta(n):
+        raise HTTPException(400, f"La ficha del cap {n} ya esta rellena.")
+    exigir_libre()
+
+    def tarea(job: Job) -> None:
+        pipeline.paso_ficha(n, on_linea=job.linea, registrar_proceso=job.registrar_proceso)
+
+    job = lanzar_job("nuevo_capitulo", {"n": n, "solo_ficha": True}, tarea)
+    return {"job_id": job.id}
+
+
+# --------------------------------------------------------------------------- lectura
+
+def partir_capitulo(texto: str) -> dict:
+    """Separa el titulo del cuerpo y el cuerpo en parrafos, para leerlo como un libro.
+
+    Se hace aqui y no en el navegador porque el formato de un capitulo ya esta
+    definido en `_comun.parrafos_capitulo`, que es lo que el hook cuenta al
+    guardar: si la lectura partiera los parrafos por su cuenta, la pagina podria
+    ensenar una forma distinta de la que el sistema valida.
+    """
+    titulo = ""
+    for linea in texto.splitlines():
+        if linea.strip().startswith("#"):
+            titulo = linea.strip().lstrip("#").strip()
+            break
+    # Los capitulos se titulan «3. Jueves, de nueve a diez»: el numero va aparte
+    # en la pagina, asi que aqui sobra y duplicado queda feo en la portadilla.
+    titulo = re.sub(r"^\d+\s*[.—-]\s*", "", titulo)
+    return {"titulo": titulo, "parrafos": parrafos_capitulo(texto)}
+
+
+@app.get("/api/lectura")
+def api_lectura() -> dict:
+    """La novela tal como va, para leerla seguida.
+
+    Se sirve desde `manuscript/` y no desde `dist/manuscrito.md` a proposito: el
+    manuscrito compilado solo existe cuando N5 cierra, y leer lo que hay es util
+    mucho antes de eso. Solo entran los capitulos consolidados, porque un
+    capitulo en revision o escalado todavia no es texto de la novela.
+    """
+    config = leer_json(CONFIG) if CONFIG.exists() else {}
+    outline = leer_json(OUTLINE) if OUTLINE.exists() else {"capitulos": []}
+    bible = leer_json(BIBLE) if BIBLE.exists() else {}
+
+    capitulos, pendientes = [], []
+    for cap in sorted(outline.get("capitulos", []), key=lambda c: c["n"]):
+        n = cap["n"]
+        ruta = MANUSCRITO / f"cap-{n:02d}.md"
+        if cap.get("estado") != "consolidado" or not ruta.exists():
+            pendientes.append({"n": n, "titulo": cap.get("titulo", ""),
+                               "estado": cap.get("estado", "pendiente")})
+            continue
+        datos = partir_capitulo(ruta.read_text(encoding="utf-8"))
+        capitulos.append({"n": n, "titulo": datos["titulo"] or cap.get("titulo", ""),
+                          "parrafos": datos["parrafos"]})
+
+    return {
+        "titulo": config.get("titulo_trabajo", "") or bible.get("titulo_trabajo", ""),
+        "capitulos": capitulos,
+        "pendientes": pendientes,
+        "lineas": sum(len(p) for c in capitulos for p in c["parrafos"]),
+        "compilado": (RAIZ / "dist" / "manuscrito.md").exists(),
+    }
 
 
 @app.post("/api/sincronizar")
@@ -527,12 +794,54 @@ def api_job_cancelar(job_id: str) -> dict:
 
 # --------------------------------------------------------------------------- estaticos
 
-app.mount("/static", StaticFiles(directory=str(ESTATICOS)), name="static")
+class EstaticosRevalidados(StaticFiles):
+    """Sirve los estaticos obligando a revalidar en cada carga.
+
+    `StaticFiles` manda `etag` y `last-modified` pero ningun `Cache-Control`, y
+    sin esa cabecera el navegador aplica **caché heurística**: se queda el
+    fichero durante un rato -tipicamente un 10% del tiempo transcurrido desde su
+    ultima modificacion- y lo sirve sin preguntar al servidor. En una pagina que
+    se edita mientras se usa eso produce un fallo desconcertante: el `index.html`
+    llega nuevo y el `app.js` llega viejo, asi que la pagina queda a medias -un
+    boton sin su manejador, la logica antigua de pintado- sin un solo error en
+    consola que lo delate.
+
+    `no-cache` no significa «no guardes», significa «pregunta siempre antes de
+    usarlo». Con el `etag` que ya se manda, esa pregunta se responde con un 304
+    de unos pocos bytes: no cuesta nada y el navegador no puede quedarse atras.
+    """
+
+    async def get_response(self, path: str, scope):
+        respuesta = await super().get_response(path, scope)
+        respuesta.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return respuesta
+
+
+app.mount("/static", EstaticosRevalidados(directory=str(ESTATICOS)), name="static")
+
+
+def version_de(nombre: str) -> str:
+    """Huella del fichero, para colgarla de su URL."""
+    try:
+        return str(int((ESTATICOS / nombre).stat().st_mtime))
+    except OSError:
+        return "0"
 
 
 @app.get("/")
-def index() -> FileResponse:
-    return FileResponse(str(ESTATICOS / "index.html"))
+def index() -> Response:
+    """La pagina, con los estaticos versionados por su fecha de modificacion.
+
+    El `no-cache` de arriba ya basta con un navegador que se porte bien, pero el
+    sufijo `?v=` hace que un `app.js` editado sea *otra URL*: ni un proxy ni una
+    cache agresiva pueden servir el anterior. Cinturon y tirantes, porque el
+    modo de fallo de servir medio front viejo cuesta mucho de diagnosticar.
+    """
+    html = (ESTATICOS / "index.html").read_text(encoding="utf-8")
+    for nombre in ("app.js", "style.css"):
+        html = html.replace(f"/static/{nombre}", f"/static/{nombre}?v={version_de(nombre)}")
+    return Response(html, media_type="text/html; charset=utf-8",
+                    headers={"Cache-Control": "no-store"})
 
 
 if __name__ == "__main__":
