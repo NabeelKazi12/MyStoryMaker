@@ -210,6 +210,8 @@ aprobado ⟺ continuidad ≥ 3 ∧ min(criterios) ≥ 3 ∧ media ≥ 4,0
 
 Una puntuación de 1 o 2 en continuidad rechaza el capítulo aunque la media sea alta. Es la única asimetría deliberada de la rúbrica.
 
+**Qué cuenta como iteración.** Una iteración es un juicio de N4 atendido: se gasta cuando el Revisor rechaza y se vuelve a N3 con sus notas. El rechazo del hook `validar_extension.py` **no** es una iteración: no hubo juicio de calidad, solo un conteo de líneas que no cuadra, y se repara relanzando a N3 con `scripts/contexto.py N --para reparacion` —el texto y las cifras, nada más—. El tope es de **dos reparaciones por iteración**; a la tercera se vuelve a N3 con contexto completo y esa sí gasta iteración, porque un Escritor que no cuadra el conteo con el texto delante tiene un problema que no es de forma. INV-02 sigue contando iteraciones, no intentos.
+
 ---
 
 ## 9. D2 · ¿Quedan capítulos?

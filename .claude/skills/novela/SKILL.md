@@ -28,14 +28,44 @@ Sin argumento, muestra el estado y propón el siguiente paso.
 
 ## Antes de nada
 
+**Un solo comando, una sola vez por sesión:**
+
 ```
-python scripts/validar_capitulos.py
-python scripts/consolidar.py estado
+python scripts/consolidar.py estado --json
 ```
 
-Si la configuración no valida, detente y dilo: no se produce nada con un plan
-inválido. Si `outline.json` declara una `config_version` distinta de la actual,
-ejecuta `/novela sincronizar` antes de seguir (SPECS §12.4).
+Devuelve en una línea la validación del plan, la deriva de `config_version`, el
+siguiente capítulo pendiente y el siguiente paso. No lo complementes con
+`validar_capitulos.py` ni con `estado` a secas: ya están dentro. No lo repitas
+«para confirmar» —si necesitas confirmar algo que acabas de leer, el problema es
+que no lo leíste—, y no lo vuelvas a ejecutar después de consolidar salvo que
+vayas a decidir otro capítulo.
+
+Si `config_valida` es `false`, detente y dilo: no se produce nada con un plan
+inválido. Si `desincronizado` es `true`, ejecuta `/novela sincronizar` antes de
+seguir (SPECS §12.4).
+
+## Economía de contexto: lo que no lees
+
+Eres la ventana más cara del sistema. En el ciclo medido del capítulo 2 gastaste
+**más que el Escritor y el Revisor juntos** sin escribir una sola línea de novela,
+porque cada fichero que abres se queda en tu contexto y se vuelve a pagar en cada
+turno que te queda por delante.
+
+- **No abras `memory/bible.json`, `memory/outline.json` ni `memory/ledger.json`.**
+  No necesitas su contenido: quien lo necesita es el subagente, y lo recibe por su
+  cuenta. `estado --json` ya te da lo único que tú decides con ello.
+- **No abras `manuscript/*.md` ni `reviews/*.json`.** Guardas el capítulo que te
+  devuelve el Escritor y la revisión que te devuelve el Revisor; no vuelves a
+  leerlos. Para aplicar D1 te basta con el JSON que acabas de recibir.
+- **No abras `research/`, `SPECS.md` ni `config/capitulos.json`.**
+- **Una herramienta por intento.** Si un comando falla, lee el error y corrige;
+  no lo repitas con otra herramienta a ver si esa sí. Usa `Bash`, no `PowerShell`.
+- **No resumas al autor lo que ya está en pantalla.** Una línea por paso: nodo,
+  capítulo, iteración. Es la regla que ya tenías y también es la barata.
+
+La excepción es el escalado (E7), donde sí presentas el texto y las revisiones al
+autor porque ahí hay una decisión humana que tomar.
 
 ## N0 · Brief
 
@@ -73,18 +103,45 @@ vuelve a lanzar N2 con el motivo; no lo arregles tú.
 
 Para el capítulo N, con `iteracion` empezando en 1:
 
-**N3 · Escribir.** Lanza el subagente `escritor` con: la ficha de N en
-`outline.json`, `bible.json`, el resumen de todos los capítulos anteriores y el
-**texto completo solo de los dos inmediatamente anteriores**, y —si es
-reescritura— las notas de `reviews/cap-NN.json`. Guarda su capítulo tal cual en
-`manuscript/cap-NN.md`.
+**N3 · Escribir.** Arma el contexto y pásale **la ruta**, no el contenido:
 
-El hook `validar_extension.py` cuenta las líneas al guardar. Si rechaza, **cuenta
-como iteración**: vuelve a N3 con el mensaje del hook.
+```
+python scripts/contexto.py N --para escritor --iteracion K
+```
 
-**N4 · Revisar.** Lanza el subagente `revisor` en contexto limpio. Guarda su JSON
-en `reviews/cap-NN.json`. Nunca pases al Revisor el razonamiento del Escritor:
-la separación de contextos es lo que hace que la puntuación signifique algo.
+Imprime una ruta en `.contexto/`. Pégala en el prompt del `Task` diciéndole al
+Escritor que la lea: es todo su material —ficha, forma exacta, voz, ledger ya
+filtrado por capítulo, resúmenes previos, los dos capítulos anteriores completos
+y la investigación— en un solo `Read`. **Tú no abres ese fichero**: si lo lees, el
+ahorro se convierte en gasto, porque el payload se queda en tu ventana para el
+resto de la sesión.
+
+Guarda su capítulo tal cual en `manuscript/cap-NN.md`.
+
+**Si el hook `validar_extension.py` rechaza**, es un fallo de forma, no de
+calidad, y tiene vía propia:
+
+```
+python scripts/contexto.py N --para reparacion
+```
+
+Relanza al Escritor con esa ruta: lleva solo su texto, lo que tiene y lo que
+debía tener. **Una reparación no consume iteración de las tres**, con un tope de
+**dos reparaciones por iteración**; a la tercera, el problema no es el conteo y
+vuelves a N3 normal gastando iteración. Cuesta unas diez veces menos que
+reconstruir todo el contexto de N3 por un renglón de más.
+
+**N4 · Revisar.** Igual, en contexto limpio:
+
+```
+python scripts/contexto.py N --para revisor
+```
+
+El payload lleva el capítulo, la rúbrica aplicable, el ledger filtrado y la
+extensión **ya contada**, para que el Revisor no gaste razonamiento recontando
+líneas. Guarda su JSON en `reviews/cap-NN.json`. Nunca pases al Revisor el
+razonamiento del Escritor: la separación de contextos es lo que hace que la
+puntuación signifique algo.
 
 **D1 · ¿Aprobado?**
 
@@ -141,7 +198,10 @@ la concede a sí mismo.
 
 ## Reglas que no negocias
 
-- Máximo **3 iteraciones** por capítulo (INV-02). La cuarta no existe.
+- Máximo **3 iteraciones** por capítulo (INV-02). La cuarta no existe. Una
+  reparación de forma no es una iteración —no hubo juicio del Revisor que
+  atender—, pero el tope de dos por iteración sí es innegociable: si el Escritor
+  no sabe cuadrar el conteo con el texto delante, lo que falla no es el conteo.
 - Ningún capítulo entra en memoria sin revisión aprobada (INV-01).
 - Los capítulos se consolidan **en orden** (INV-05).
 - La escaleta no cambia durante la producción sin el autor (INV-03).

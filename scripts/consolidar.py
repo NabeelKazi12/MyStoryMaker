@@ -218,7 +218,66 @@ def aplicar_hechos(ledger: dict, n: int, hechos: list, contiene_combate: bool) -
 
 # --------------------------------------------------------------------------- comandos
 
-def cmd_estado(_: argparse.Namespace) -> int:
+def estado_json() -> int:
+    """Todo lo que el orquestador necesita para decidir el siguiente paso, de una vez.
+
+    Antes hacian falta `validar_capitulos.py` y `estado`, y la traza del capitulo 2
+    muestra el primero ejecutado tres veces y el segundo dos: cinco turnos a unos
+    60.000 tokens de contexto cada uno para averiguar que tocaba escribir el
+    capitulo 2. La validacion del plan, la deriva de config y el siguiente
+    pendiente son una sola pregunta y aqui se responden juntas y en compacto: lo
+    que no cabe en una linea acaba releyendose.
+    """
+    import validar_capitulos
+
+    try:
+        config = leer_json(CONFIG)
+    except Exception as exc:
+        print(json.dumps({"config_valida": False, "errores": [str(exc)],
+                          "siguiente": "corregir config/capitulos.json"}, ensure_ascii=False))
+        return 1
+
+    errores = validar_capitulos.validar(config)
+    outline = cargar(OUTLINE, {"capitulos": []})
+    capitulos = outline.get("capitulos", [])
+    pendientes = [c for c in capitulos if c.get("estado") == "pendiente"]
+    escalados = [c for c in capitulos if c.get("estado") == "escalado"]
+    desincronizado = bool(capitulos) and outline.get("config_version") != config.get("version")
+
+    if errores:
+        siguiente = "corregir config/capitulos.json; no se produce nada con un plan invalido"
+    elif not capitulos:
+        siguiente = "N1 y N2: investigacion y escaleta"
+    elif desincronizado:
+        siguiente = "/novela sincronizar antes de seguir (SPECS 12.4)"
+    elif escalados:
+        siguiente = f"ESCALADO al autor en cap {escalados[0]['n']}: D2 no avanza"
+    elif pendientes:
+        siguiente = f"N3 del capitulo {pendientes[0]['n']}"
+    else:
+        siguiente = "N5: compilar el manuscrito"
+
+    proximo = pendientes[0]["n"] if pendientes and not escalados and not desincronizado else None
+    salida = {
+        "config_valida": not errores,
+        "errores": errores,
+        "config_version": config.get("version"),
+        "outline_version": outline.get("version"),
+        "desincronizado": desincronizado,
+        "siguiente_capitulo": proximo,
+        "siguiente": siguiente,
+        "escalados": [c["n"] for c in escalados],
+        "capitulos": [{"n": c["n"], "estado": c.get("estado"),
+                       "iteraciones": c.get("iteraciones", 0)} for c in capitulos],
+        "record": ledger_actual().get("record", {}),
+    }
+    print(json.dumps(salida, ensure_ascii=False, separators=(",", ":")))
+    return 0 if not errores else 1
+
+
+def cmd_estado(args: argparse.Namespace) -> int:
+    if getattr(args, "json", False):
+        return estado_json()
     config = leer_json(CONFIG)
     if not cargar(OUTLINE, {"capitulos": []}).get("capitulos"):
         print("Escaleta no sembrada. Siguiente paso: N1 (investigacion) y N2 (escaleta).")
@@ -569,7 +628,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Escritura en la memoria de MyStoryMaker")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    sub.add_parser("estado").set_defaults(func=cmd_estado)
+    p = sub.add_parser("estado")
+    p.add_argument("--json", action="store_true",
+                   help="Salida compacta en una linea: valida el plan, detecta la deriva de "
+                        "config y dice el siguiente paso. Es la forma en que lo llama el "
+                        "orquestador, que paga cada turno en contexto.")
+    p.set_defaults(func=cmd_estado)
 
     p = sub.add_parser("sembrar-bible"); p.add_argument("fichero")
     p.set_defaults(func=cmd_sembrar_bible)

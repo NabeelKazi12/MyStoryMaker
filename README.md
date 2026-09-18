@@ -69,10 +69,12 @@ del manuscrito final en `ui/estado_ui.json`; ninguno de los dos se versiona.
 | [`.claude/skills/novela/`](.claude/skills/novela/SKILL.md) | El comando `/novela` |
 | [`.claude/settings.json`](.claude/settings.json) | Hooks: las condiciones de salida hechas ejecutables |
 | [`scripts/`](scripts/) | Validadores, escritura atómica en memoria, lanzador y compilación |
+| [`scripts/contexto.py`](scripts/contexto.py) | Precomputa el contexto de cada subagente: lo recibe hecho en vez de explorarlo |
 | [`config/`](config/) | Plan de capítulos del autor y su esquema |
 | `memory/` | Biblia, escaleta viva y ledger de continuidad |
 | `research/` `manuscript/` `reviews/` `logs/` `dist/` | Producción |
 | [`specs/`](specs/README.md) | Especificación funcional y técnica |
+| [`docs/operacion.md`](docs/operacion.md) | Hooks, observabilidad y economía de tokens del circuito |
 | [`docs/diagrama.drawio`](docs/diagrama.drawio) | El diagrama de referencia |
 
 ## Las tres reglas que sostienen el diseño

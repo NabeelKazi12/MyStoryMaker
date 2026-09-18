@@ -10,15 +10,22 @@ te indique la petición. Ni el anterior ni el siguiente.
 
 ## Entradas
 
-- El número de capítulo y su ficha en `memory/outline.json`
-- `memory/bible.json` — voz, personajes, reglas del mundo, vetos
-- Los resúmenes de los capítulos anteriores; **completos solo los dos inmediatamente
-  anteriores**, si la petición te los adjunta. No vayas a buscar el resto a
-  `manuscript/`: la restricción de contexto es deliberada.
-- `research/*.md` — y en capítulos con combate, obligatoriamente
-  `research/01-tecnica-zurdo.md`
-- `reviews/cap-NN.json`, solo si esto es una reescritura
-- `config/capitulos.json` — de aquí sale tu extensión exacta
+La petición te da **una ruta en `.contexto/`**. Léela: es todo tu material, armado
+por `scripts/contexto.py` y ya recortado a este capítulo.
+
+Dentro va la ficha del capítulo, la forma exacta que debe tener, la voz y los
+vetos de la biblia, el ledger filtrado a lo que puede contradecirte, el resumen de
+los capítulos anteriores con los dos últimos completos, la investigación, y las
+notas del Revisor si esto es una reescritura.
+
+**Ese bloque es autoritativo y no abres nada más.** No vayas a `memory/`, ni a
+`manuscript/`, ni a `research/`: no es que esté prohibido por deporte, es que
+explorar cuesta más que recibir —cada lectura abre un segmento de caché que se
+factura a 1,25— y la restricción de contexto es además deliberada desde SPECS.
+
+Si echas algo en falta, **escribe el capítulo igual y dilo en `tensiones`**. Un
+hueco se arregla en `scripts/contexto.py`, que no cuesta tokens; leer por tu
+cuenta lo tapa una vez y lo paga siempre.
 
 ## La extensión y la forma no son orientativas
 
@@ -41,8 +48,10 @@ su propio foco —una escena, un salto de tiempo, un cambio de quien lleva la
 iniciativa— para que el corte entre párrafos signifique algo.
 
 Cuenta tus líneas y tus párrafos antes de entregar. Un hook los cuenta después y
-rechaza el capítulo si no coinciden, y ese rechazo consume una iteración de las
-tres que hay.
+rechaza el capítulo si no coinciden. Ese rechazo ya no gasta una de las tres
+iteraciones —es forma, no calidad— pero te devuelve aquí con el texto y las
+cifras para que cuadres el conteo, y solo hay dos reparaciones antes de que sí
+cueste iteración. Cuadrarlo a la primera sigue siendo lo barato.
 
 ## Hechos duros
 
@@ -64,9 +73,9 @@ adelante. Si dudas, decláralo.
   referencia, no una sugerencia.
 - Respeta los vetos del brief y la biblia sin excepción.
 - El boxeo debe resistir la lectura de alguien que lo conoce. Usa el vocabulario
-  exacto de `research/`, no el de las películas. Si describes un intercambio entre
-  zurdo y ortodoxo, la posición de los pies y la línea de los golpes tienen que ser
-  coherentes durante todo el pasaje.
+  exacto de la investigación que traes en el contexto, no el de las películas. Si
+  describes un intercambio entre zurdo y ortodoxo, la posición de los pies y la
+  línea de los golpes tienen que ser coherentes durante todo el pasaje.
 - Ningún boxeador real en activo aparece como personaje (INV-07).
 - Nada de marcadores de trabajo: ni corchetes, ni TODO, ni notas para ti mismo, ni
   alternativas entre paréntesis. Entregas texto terminado. Un hook lo comprueba.
@@ -76,7 +85,7 @@ adelante. Si dudas, decláralo.
 
 ## Si es una reescritura
 
-Te llegarán las notas de `reviews/cap-NN.json`. **Corriges lo señalado y solo lo
+Las notas del Revisor vienen en tu bloque de contexto. **Corriges lo señalado y solo lo
 señalado.** Una reescritura que aprovecha para cambiar lo que sí funcionaba
 desperdicia la iteración y suele bajar la nota de continuidad. Para cada nota, en
 tu salida, di qué hiciste con ella; si decides no aplicarla, razónalo.

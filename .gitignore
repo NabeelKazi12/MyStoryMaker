@@ -12,6 +12,10 @@ dist/*
 logs/*.jsonl
 logs/.langfuse-*.json
 
+# Contexto precomputado de los subagentes (scripts/contexto.py). Material
+# derivado: se regenera de memory/ y config/ cuando haga falta.
+.contexto/
+
 # Temporales de la escritura atomica
 memory/.*.tmp
 

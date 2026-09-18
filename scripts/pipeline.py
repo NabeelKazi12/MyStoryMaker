@@ -311,17 +311,25 @@ indicaciones nuevas; atiendelas en la reescritura:
 {AUTORIZACION}
 
 La forma exigida es {forma}. Es igualdad exacta, sin tolerancia: un hook la comprueba al
-guardar en manuscript/ y su rechazo consume una de las tres iteraciones.
+guardar en manuscript/.
 {indicaciones_bloque}
 
-Recuerda el ciclo: subagente 'escritor' -> guardas manuscript/cap-{n:02d}.md -> subagente
-'revisor' en contexto limpio -> guardas reviews/cap-{n:02d}.json -> recalculas D1 tu mismo
--> si aprueba, 'python scripts/consolidar.py capitulo {n} --iteracion K --resumen "..."'.
+Recuerda el ciclo: 'python scripts/contexto.py {n} --para escritor --iteracion K' -> pasas
+la RUTA que imprime al subagente 'escritor' -> guardas manuscript/cap-{n:02d}.md ->
+'python scripts/contexto.py {n} --para revisor' -> pasas la ruta al subagente 'revisor' en
+contexto limpio -> guardas reviews/cap-{n:02d}.json -> recalculas D1 tu mismo -> si aprueba,
+'python scripts/consolidar.py capitulo {n} --iteracion K --resumen "..."'.
+
+Tu no abres los ficheros de .contexto/: pasas la ruta. Si los lees, el payload se queda en
+tu ventana y se vuelve a pagar en cada turno que te queda. Tampoco abres memory/,
+manuscript/, reviews/ ni research/: no los necesitas para decidir.
 
 Si al guardar el capitulo el hook lo rechaza por extension o por forma, NO es un problema
 de permisos ni un fallo del sistema: es la condicion de salida de N3 funcionando. El fichero
-queda en disco con la version rechazada; vuelve a lanzar al Escritor pasandole el mensaje
-del hook, sobrescribe el mismo fichero y sigue. Ese rechazo consume iteracion.
+queda en disco con la version rechazada. Eso es un fallo de FORMA, no de calidad, y tiene
+via propia: 'python scripts/contexto.py {n} --para reparacion' y relanzas al Escritor con
+esa ruta, que lleva solo su texto y el conteo. Una reparacion NO consume iteracion, con un
+tope de dos por iteracion; a la tercera vuelves a N3 normal y esa si gasta iteracion.
 
 No escribas ni retoques la prosa tu: si el texto no vale, vuelve al Escritor.
 No termines el paso a medias: o el capitulo queda consolidado con consolidar.py, o queda

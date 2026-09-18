@@ -77,94 +77,34 @@ de lanzar una novela larga. Para ampliarla solo se toca `config/capitulos.json`.
 Una línea es una línea no vacía del cuerpo del capítulo, sin contar el título. Un
 párrafo es un bloque de líneas separado del siguiente por una línea en blanco.
 
-## Hooks
+## Operación
 
-No son recordatorios: son las condiciones de salida hechas ejecutables.
+Los hooks, la observabilidad en Langfuse, la economía de tokens del circuito y la
+lista completa de comandos están en [`docs/operacion.md`](docs/operacion.md). No
+viven aquí porque este fichero entra entero en la ventana del orquestador y en la
+de los cuatro subagentes, y en cada turno de cada uno: lo que el Escritor no usa
+para escribir, no debería estar pagándose mientras escribe.
 
-| Hook | Momento | Comprueba |
-|---|---|---|
-| `bloquear_memoria.py` | Antes de escribir | Que nadie edite `memory/` ni `config/capitulos.json` a mano (INV-09) |
-| `validar_extension.py` | Al escribir en `manuscript/` | Extensión exacta, reparto en párrafos y ausencia de marcadores (N3) |
-| `validar_capitulos.py` | Al editar la configuración | Esquema, numeración, unidad y suma (RM-03) |
-| `registrar_coste.py` | Al terminar un subagente | Mide su consumo real y publica su span en Langfuse |
-| `traza_langfuse.py` | Inicio y fin de sesión, y cada herramienta | Publica la traza en Langfuse (observa, nunca deniega) |
+Lo mínimo que sí conviene tener a mano:
+
+```
+python scripts/consolidar.py estado --json    en una linea: plan, deriva y siguiente paso
+python scripts/contexto.py N --para escritor  material de un subagente, a fichero
+python scripts/compilar.py                    produce la novela entera y compila
+```
 
 Un hook que rechaza no es un obstáculo que rodear. Es el sistema funcionando: lee
 el motivo y corrige el paso.
 
-`traza_langfuse.py` es la excepción a esa frase: no rechaza nada. Es el único
-hook que no es una condición de salida sino un observador, y por eso está escrito
-para no fallar jamás —si Langfuse está caído o mal configurado, el harness
-produce la novela exactamente igual y lo único que se pierde es la traza.
+## El contexto no es gratis
 
-## Observabilidad
-
-Cada sesión de Claude Code es **una traza** en Langfuse. Dentro cuelgan, del
-tronco, un span por cada llamada a herramienta y uno por cada subagente, este
-último con su modelo y sus tokens. Como el lanzador abre una sesión headless por
-paso del circuito, en Langfuse se ve una traza por paso: «N1 y N2», cada capítulo.
-
-Las puntuaciones del Revisor suben como *scores* de Langfuse —los cinco criterios,
-la media, la iteración y el fallo de D1— tanto si el capítulo se aprueba como si
-se rechaza. Eso es lo que permite comparar iteraciones y capítulos entre sí en vez
-de solo mirar trazas sueltas: si la media sube mientras los tokens bajan, el
-sistema está mejorando; si D1 rechaza tres veces seguidas por continuidad, el
-problema está en la escaleta y no en el Escritor.
-
-```
-python scripts/verificar_langfuse.py          prueba de extremo a extremo
-python scripts/verificar_langfuse.py estado   qué hay en la cola y qué ha subido
-```
-
-La configuración está en `.env` (fuera de git; la plantilla es `.env.example`).
-Sin claves, todo esto son operaciones nulas. `LANGFUSE_TRAZAR_HERRAMIENTAS=0`
-deja solo los subagentes, que es lo que conviene si el span por herramienta
-resulta demasiado ruido.
-
-Los spans no se envían en caliente: se encolan en `logs/langfuse-cola.jsonl` y
-suben por lotes al cerrarse un subagente o la sesión. Una red lenta retrasa la
-traza, nunca el trabajo. Si la cola no se vacía nunca, ahí está el fallo.
-
-```
-python scripts/resumen_langfuse.py            tokens y coste por agente
-```
-
-### Dos cosas que no son obvias y cuestan una tarde
-
-**`Task` no dispara `PreToolUse` ni `PostToolUse`.** El único evento de un
-subagente es `SubagentStop`, y por eso su span lo emite `registrar_coste.py` y no
-`traza_langfuse.py`. Si algún día un span de subagente aparece con duración cero,
-es que alguien ha vuelto a colgarlo del ciclo de vida de una herramienta.
-
-**El `transcript_path` de `SubagentStop` es el del orquestador, no el del
-subagente.** Sumarlo atribuye a cada agente el gasto acumulado de la sesión
-entera: el Revisor siempre parecería más caro que el Escritor solo por correr
-después. La transcripción buena está en `<sesión>/subagents/agent-*.jsonl` y es la
-última modificada. De ahí salen tokens, modelo, inicio y fin, desglosando entrada
-fresca, escritura de caché y lectura de caché —que valen 1, 1,25 y 0,1— porque
-meterlo todo en «input» infla el coste alrededor de un 50%.
-
-## Comandos
-
-```
-/novela estado         progreso
-/novela preparar       investigación y escaleta
-/novela capitulo N     ciclo completo de un capítulo
-/novela continuar      hasta agotar pendientes o escalar
-/novela compilar       manuscrito final
-/novela sincronizar    reproyecta un cambio de configuración
-
-python scripts/compilar.py              produce la novela entera y compila
-python scripts/compilar.py --solo-compilar  compila lo ya consolidado
-python scripts/compilar.py --verificar  comprueba N5 sin escribir
-python scripts/validar_capitulos.py     valida el plan
-python scripts/consolidar.py estado     progreso sin cargar la sesión
-python scripts/verificar_langfuse.py    comprueba que la traza llega a Langfuse
-```
-
-`compilar.py` sin argumentos es el lanzador: abre una sesión headless por paso del
-circuito y compila al final. Sirve para producir sin supervisión; cuando estás tú
-delante, `/novela` es lo mismo con la parada en cada punto de decisión del autor.
+Cada fichero que abre el orquestador se queda en su ventana y se vuelve a pagar en
+todos los turnos que le quedan; cada lectura de un subagente abre un segmento de
+caché que cuesta más que recibir el material ya hecho. Por eso el material de N3 y
+N4 lo arma `scripts/contexto.py` en local —sin tokens, ya recortado al capítulo— y
+se pasa **por ruta**, nunca por contenido. El orquestador no abre `memory/`,
+`manuscript/`, `reviews/` ni `research/`: no los necesita, y quien los necesita ya
+los recibe.
 
 ## Invariantes
 
