@@ -1,0 +1,60 @@
+{
+  "capitulo": 3,
+  "iteracion": 2,
+  "puntuaciones": {
+    "tension": 4,
+    "verosimilitud_tecnica": 5,
+    "avance_arco": 5,
+    "prosa": 4,
+    "continuidad": 5
+  },
+  "media": 4.6,
+  "veredicto": "aprobado",
+  "verificacion_combate": {
+    "guardia_coherente": false,
+    "pie_adelantado": false,
+    "clinch": false,
+    "esquina": false,
+    "tarjetas": false,
+    "observaciones": "No aplica: contiene_combate es false y el capítulo no incluye combate ni sparring dentro del ring, tal como exige el veto. Los cinco puntos de la lista de combate se dejan en false por no existir escena que verificar, no porque falten."
+  },
+  "notas": [
+    {
+      "severidad": "baja",
+      "ubicacion": "linea 11, \"puse el izquierdo delante y tiré rectos con la derecha\"",
+      "problema": "\"El izquierdo\" es ambiguo en primera lectura entre el pie y una mano, ya que la voz nunca nombra \"zurda\" ni especifica de inmediato que habla del pie; el ancla llega una frase después con \"el pie de delante no me lo veía\".",
+      "sugerencia": "Adelantar la palabra \"pie\" en esta misma frase (por ejemplo \"puse el pie izquierdo delante\") para que la imagen quede fijada antes de pasar a las manos en la frase siguiente."
+    },
+    {
+      "severidad": "baja",
+      "ubicacion": "conjunto del capítulo, hilos h01-guardia-contraria y h02-ring-jueves",
+      "problema": "El capítulo cumple el plazo cerrar_antes_de:3 de ambos hilos convirtiendo el secreto en un trato con testigo pagado y dando propósito a las cuatro horas de ring, pero de esas cuatro horas solo la primera ocurre de verdad en escena: las tres restantes con Yeray quedan contratadas, no mostradas. Si se cierran ambos hilos sin abrir uno nuevo, el ledger dará por resuelta una práctica que todavía no ha producido ningún resultado utilizable.",
+      "sugerencia": "Al consolidar, cerrar h01 y h02 tal como llegan a este capítulo pero abrir un hilo nuevo específico para las tres sesiones de coaching con Yeray (incluida la deuda de 25€ y la condición del móvil en la bolsa), con su propio cerrar_antes_de en un capítulo próximo."
+    }
+  ],
+  "hechos_nuevos": [
+    {
+      "tipo": "hilo_cerrado",
+      "id": "h01-guardia-contraria"
+    },
+    {
+      "tipo": "hilo_cerrado",
+      "id": "h02-ring-jueves"
+    },
+    {
+      "tipo": "hilo_abierto",
+      "id": "h03-yeray-coach-jueves",
+      "descripcion": "Damián contrata a Yeray a 25€/hora para las tres horas de ring de jueves que le quedan pagadas (9 a 10), para que le mire el pie delantero de la guardia contraria y diga en alto lo que vea. Condición aceptada sin ceremonia: el móvil de Yeray se queda en la bolsa. El trato suma 75€; Damián solo tiene aseguradas dos sesiones de martes pendientes de cobrar como zurdo de encargo (50€ a 25€/hora), así que le faltan 25€ que ya debe antes de tenerlos. Nuria ha escrito los dos nombres en la misma casilla del jueves sin conocer el motivo. El hilo se cierra cuando se cumplan o se rompan las tres sesiones, cuando Damián pague o deje de pagar la deuda, o cuando el acuerdo se haga público más allá de Yeray y Nuria.",
+      "cerrar_antes_de": 5
+    },
+    {
+      "tipo": "cronologia",
+      "fecha_ficcion": "posterior a marzo, mismo periodo narrativo que el capítulo 2; jueves de nueve a diez de la noche, gimnasio vacío, primera de las cuatro horas de ring pagadas",
+      "evento": "Damián entrena solo la guardia contraria (pie izquierdo delante, rectos de derecha) contra el saco y comprueba que no puede ver ni corregir su propio pie delantero; Yeray sube a las nueve y media a por una bolsa olvidada y se ofrece a mirarle el pie por dinero.",
+      "resultado": "Damián contrata a Yeray para los tres jueves de nueve a diez que le quedan pagados, a 25€ la hora (75€ en total), con la condición de que el móvil de Yeray se quede en la bolsa. Yeray señala en alto que Damián lleva el pie de lado en vez de adelantado y que ahí se le muere el golpe. Nuria anota los dos nombres en la misma casilla del jueves sin saber para qué.",
+      "capitulo": 3
+    }
+  ],
+  "contradicciones": [],
+  "resumen": "Incapaz de corregir a solas el pie delantero de su guardia contraria, Damián contrata a Yeray por 25€/hora para las tres horas de ring de jueves que le quedan, pagándole con dinero que aún no tiene y comprando también su silencio."
+}

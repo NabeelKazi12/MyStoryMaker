@@ -1,6 +1,6 @@
 {
-  "version": 7,
-  "config_version": 4,
+  "version": 10,
+  "config_version": 5,
   "unidad": "lineas",
   "capitulos": [
     {
@@ -46,7 +46,29 @@
         "resumen": "Nuria le ofrece a Damian dos de las seis sesiones de sparring del martes a veinticinco euros la hora, porque a Yeray Miralles le ha salido fecha y no puede cubrirlas todas; Yeray le cuenta que el manager de fuera no pidio un nombre sino una guardia, un peso y seis asaltos, y que dos prospectos con futuro rechazaron a su chico por no pelear con un zurdo. Damian acepta las dos sesiones a veinticinco sin regatear y sin nombrar los cuarenta de marzo, cede las otras cuatro a Yeray y renuncia al martes que tenia desde febrero; con el mismo gesto pregunta el precio del ring vacio fuera de horario, doce euros la hora, y paga cuarenta y ocho por adelantado por cuatro horas de jueves de nueve a diez, sin decir para que."
       },
       "resumen": "Nuria le ofrece a Damian dos de las seis sesiones de sparring del martes a veinticinco euros la hora, porque a Yeray Miralles le ha salido fecha y no puede cubrirlas todas; Yeray le cuenta que el manager de fuera no pidio un nombre sino una guardia, un peso y seis asaltos, y que dos prospectos con futuro rechazaron a su chico por no pelear con un zurdo. Damian acepta las dos sesiones a veinticinco sin regatear y sin nombrar los cuarenta de marzo, cede las otras cuatro a Yeray y renuncia al martes que tenia desde febrero; con el mismo gesto pregunta el precio del ring vacio fuera de horario, doce euros la hora, y paga cuarenta y ocho por adelantado por cuatro horas de jueves de nueve a diez, sin decir para que."
+    },
+    {
+      "n": 3,
+      "titulo": "Jueves, de nueve a diez",
+      "objetivo": "Sacar la guardia contraria del secreto y ponerle precio, testigo y calendario: en la primera de las cuatro horas compradas, Damián comprueba que solo delante del saco no aprende nada —no ve su propio pie— y acaba contratando a Yeray para las tres horas que le quedan, a veinticinco euros la hora, exactamente lo que él cobra por hacer de zurdo de encargo los martes. Con eso invierte por completo la posición del capítulo 2: el dinero que gana por ser zurdo se va íntegro en dejar de serlo, y el chaval que le quitó el sitio pasa a ser la única persona del gimnasio que sabe lo que está haciendo. El récord no se toca (14-3-1, 4 KO) y no hay combate ni sparring dentro del ring: lo que se compra es una mirada, no un oponente.",
+      "pov": "prota",
+      "conflicto": "Damián quiere aprender a pelear con la derecha adelantada sin que se sepa, porque lo único que le da de comer es que lo llamen por la guardia que tiene; y la única persona capaz de decirle dónde se le muere el pie adelantado es Yeray, que vive de que lo vean y lleva el móvil apoyado en la cuerda por costumbre. La presión es concreta y de doble filo: sin testigo, la hora pagada no le sirve —repite mal y no lo sabe—; con testigo, la información sale del local, y un zurdo al que se le ha visto entrenar de diestro deja de ser el producto que los mánagers de fuera compran por teléfono, que es su único ingreso. Se negocia lo mismo que en el capítulo 2, con los papeles cambiados: ahora el que pone el importe sobre el mostrador es él, y lo que tiene que pedir no es trabajo, es que alguien le mire el pie y no lo cuente.",
+      "salida": "Queda cerrado un trato de tres jueves, de nueve a diez, veinticinco euros la hora pagados por Damián a Yeray —setenta y cinco, el importe exacto de las dos sesiones de martes que aún no ha cobrado—, con una condición dicha en voz baja y aceptada sin ceremonia: el móvil se queda en la bolsa. En la pizarra, debajo de la línea a mano del capítulo 2, hay ahora dos nombres en la misma casilla de jueves, sin decir para qué. Hechos verificables con los que arranca lo siguiente: Damián debe ese dinero antes de tenerlo, la práctica ya tiene un testigo que puede hablar, y su primer dato útil está dicho en alto por un chaval de veinte años sin darle forma de lección.",
+      "problema_tactico": null,
+      "acto": 1,
+      "contiene_combate": false,
+      "lineas_objetivo": 12,
+      "estado": "consolidado",
+      "iteraciones": 2,
+      "consolidado_en": {
+        "iteracion": 2,
+        "media": 4.6,
+        "bible_version": 1,
+        "ledger_version": 4,
+        "resumen": "Incapaz de corregir a solas el pie delantero de su guardia contraria, Damian contrata a Yeray por 25 euros/hora para las tres horas de ring de jueves que le quedan, pagandole con dinero que aun no tiene y comprando tambien su silencio."
+      },
+      "resumen": "Incapaz de corregir a solas el pie delantero de su guardia contraria, Damian contrata a Yeray por 25 euros/hora para las tres horas de ring de jueves que le quedan, pagandole con dinero que aun no tiene y comprando tambien su silencio."
     }
   ],
-  "actualizado": "2026-09-17T21:31:23+00:00"
+  "actualizado": "2026-09-18T17:15:41+00:00"
 }

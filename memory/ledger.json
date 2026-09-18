@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "record": {
     "victorias": 0,
     "derrotas": 0,
@@ -24,23 +24,23 @@
       "evento": "Damian pregunta el precio de alquilar el ring vacio una hora entre semana fuera de horario: doce euros la hora. Compra cuatro horas y las paga por adelantado, cuarenta y ocho euros sobre el mostrador.",
       "resultado": "Queda escrita a mano en la pizarra una linea nueva en un dia que no es martes: jueves, de nueve a diez. Es la primera vez que Damian pone dinero propio en lugar de su record o su mano como argumento.",
       "capitulo": 2
+    },
+    {
+      "fecha_ficcion": "posterior a marzo, mismo periodo narrativo que el capítulo 2; jueves de nueve a diez de la noche, gimnasio vacío, primera de las cuatro horas de ring pagadas",
+      "evento": "Damián entrena solo la guardia contraria (pie izquierdo delante, rectos de derecha) contra el saco y comprueba que no puede ver ni corregir su propio pie delantero; Yeray sube a las nueve y media a por una bolsa olvidada y se ofrece a mirarle el pie por dinero.",
+      "resultado": "Damián contrata a Yeray para los tres jueves de nueve a diez que le quedan pagados, a 25€ la hora (75€ en total), con la condición de que el móvil de Yeray se quede en la bolsa. Yeray señala en alto que Damián lleva el pie de lado en vez de adelantado y que ahí se le muere el golpe. Nuria anota los dos nombres en la misma casilla del jueves sin saber para qué.",
+      "capitulo": 3
     }
   ],
   "combates": [],
   "lesiones": [],
   "hilos_abiertos": [
     {
-      "id": "h01-guardia-contraria",
-      "descripcion": "Damian ha empezado a entrenar a solas y sin testigos la guardia contraria: pie izquierdo delante, que es el que lleva detras desde siempre, y la derecha como mano atrasada. En el saco le sale mal (golpes cortos, sin cadera, empuja en vez de mover, el hombro a medio camino) y aun asi se recoloca y repite. Nadie en el gimnasio lo sabe. El hilo se cierra cuando la practica produzca un resultado utilizable, se haga publica o Damian la abandone.",
-      "abierto_en": 1,
-      "cerrar_antes_de": 3
-    },
-    {
-      "id": "h02-ring-jueves",
-      "descripcion": "Damian ha pagado por adelantado cuatro horas de ring vacio, jueves de nueve a diez, a doce euros la hora fuera de horario, sin decirle a nadie para que. En el capitulo no llega a usar ninguna. El hilo se cierra cuando esas cuatro horas se agoten, se usen para algo mostrado en escena, o Damian deje de pagarlas; esta encadenado con h01-guardia-contraria, que sigue abierto y es la razon no declarada de la compra.",
-      "abierto_en": 2,
-      "cerrar_antes_de": 3
+      "id": "h03-yeray-coach-jueves",
+      "descripcion": "Damián contrata a Yeray a 25€/hora para las tres horas de ring de jueves que le quedan pagadas (9 a 10), para que le mire el pie delantero de la guardia contraria y diga en alto lo que vea. Condición aceptada sin ceremonia: el móvil de Yeray se queda en la bolsa. El trato suma 75€; Damián solo tiene aseguradas dos sesiones de martes pendientes de cobrar como zurdo de encargo (50€ a 25€/hora), así que le faltan 25€ que ya debe antes de tenerlos. Nuria ha escrito los dos nombres en la misma casilla del jueves sin conocer el motivo. El hilo se cierra cuando se cumplan o se rompan las tres sesiones, cuando Damián pague o deje de pagar la deuda, o cuando el acuerdo se haga público más allá de Yeray y Nuria.",
+      "abierto_en": 3,
+      "cerrar_antes_de": 5
     }
   ],
-  "actualizado": "2026-09-17T17:44:23+00:00"
+  "actualizado": "2026-09-18T17:15:41+00:00"
 }
