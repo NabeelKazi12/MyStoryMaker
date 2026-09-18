@@ -86,6 +86,15 @@ def ficha_de(outline: dict, n: int) -> dict:
     cap = next((c for c in outline.get("capitulos", []) if c.get("n") == n), None)
     if cap is None:
         fallo(f"El capitulo {n} no esta en memory/outline.json. Siembra la escaleta antes.")
+    # 'sincronizar' anade los capitulos nuevos con la ficha vacia (RM-01). Armar
+    # el contexto con ella no fallaria, y eso es justo el problema: el Escritor
+    # recibiria un encargo sin conflicto ni salida y escribiria a ciegas. Mejor
+    # parar aqui que gastar una iteracion en averiguarlo.
+    vacios = [k for k in ("objetivo", "conflicto", "salida") if not str(cap.get(k) or "").strip()]
+    if vacios:
+        fallo(f"La ficha del capitulo {n} no tiene {', '.join(vacios)}: la anadio 'sincronizar' "
+              f"y N2 todavia no la ha rellenado. Lanza la escaleta y persistela con "
+              f"'consolidar.py sembrar-capitulo {n} <fichero>' antes de N3.")
     return cap
 
 

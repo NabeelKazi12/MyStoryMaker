@@ -244,6 +244,13 @@ def estado_json() -> int:
     escalados = [c for c in capitulos if c.get("estado") == "escalado"]
     desincronizado = bool(capitulos) and outline.get("config_version") != config.get("version")
 
+    # Un capitulo que 'sincronizar' acaba de anadir entra como pendiente pero con
+    # la ficha en blanco (RM-01), y mandar a N3 con una ficha vacia es escribir a
+    # ciegas: el Escritor no sabria ni el conflicto ni la salida del capitulo.
+    sin_ficha = [c["n"] for c in capitulos
+                 if c.get("estado") == "pendiente"
+                 and not all(str(c.get(k) or "").strip() for k in ("objetivo", "conflicto", "salida"))]
+
     if errores:
         siguiente = "corregir config/capitulos.json; no se produce nada con un plan invalido"
     elif not capitulos:
@@ -252,15 +259,22 @@ def estado_json() -> int:
         siguiente = "/novela sincronizar antes de seguir (SPECS 12.4)"
     elif escalados:
         siguiente = f"ESCALADO al autor en cap {escalados[0]['n']}: D2 no avanza"
+    elif sin_ficha:
+        siguiente = (f"N2 debe rellenar la ficha del cap {sin_ficha[0]} y persistirla con "
+                     f"'consolidar.py sembrar-capitulo {sin_ficha[0]} <fichero>'; sin ficha "
+                     "no se lanza N3")
     elif pendientes:
         siguiente = f"N3 del capitulo {pendientes[0]['n']}"
     else:
         siguiente = "N5: compilar el manuscrito"
 
-    proximo = pendientes[0]["n"] if pendientes and not escalados and not desincronizado else None
+    proximo = (pendientes[0]["n"]
+               if pendientes and not escalados and not desincronizado and not sin_ficha
+               else None)
     salida = {
         "config_valida": not errores,
         "errores": errores,
+        "sin_ficha": sin_ficha,
         "config_version": config.get("version"),
         "outline_version": outline.get("version"),
         "desincronizado": desincronizado,

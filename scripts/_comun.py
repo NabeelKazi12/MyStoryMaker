@@ -44,7 +44,17 @@ ESTADOS = ("pendiente", "en_revision", "escalado", "consolidado")
 MAX_ITER = 3
 
 # Marcadores de trabajo prohibidos en el manuscrito final (§10, CA-5).
-MARCADORES = re.compile(r"(\[[^\]]*\]|TODO|TBD|FIXME|XXX|\bLOREM\b|<[^>]*PENDIENTE[^>]*>)", re.IGNORECASE)
+#
+# Los marcadores en ingles van en MAYUSCULAS y con limite de palabra, y eso no es
+# cosmetico: con IGNORECASE, `TODO` casaba con la palabra espanola «todo» —y con
+# «todos», y con «todo el gimnasio»—, asi que cualquier capitulo escrito en
+# castellano normal era rechazado por el hook. Costo una reparacion en el cap 3
+# antes de verse. Un marcador de trabajo real se escribe TODO, no todo.
+MARCADORES = re.compile(
+    r"\[[^\]]*\]"                            # corchetes: [pendiente], [nombre?]
+    r"|\bTODO\b|\bTBD\b|\bFIXME\b|\bXXX\b"   # solo en mayusculas
+    r"|(?i:\bLOREM\b|<[^>]*PENDIENTE[^>]*>)"
+)
 
 
 def leer_json(ruta: Path) -> dict:

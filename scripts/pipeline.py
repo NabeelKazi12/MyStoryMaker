@@ -33,6 +33,7 @@ HERRAMIENTAS = [
     "Bash(python scripts/consolidar.py:*)",
     "Bash(python scripts/compilar.py:*)",
     "Bash(python scripts/validar_capitulos.py:*)",
+    "Bash(python scripts/contexto.py:*)",
     "Read", "Glob", "Grep", "Write", "Edit", "WebSearch", "WebFetch", "Task", "Skill",
 ]
 

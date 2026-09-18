@@ -99,6 +99,30 @@ El script rechaza un plan que no coincida con `config/capitulos.json`, que no
 traiga muestra de voz o que repita problema táctico entre combates. Si rechaza,
 vuelve a lanzar N2 con el motivo; no lo arregles tú.
 
+## Sincronizar · el autor ha cambiado el plan
+
+```
+python scripts/consolidar.py sincronizar
+```
+
+Reproyecta `config/capitulos.json` sobre la escaleta viva (SPECS §12.4). Los
+capítulos que el autor **añade** entran como `pendiente` pero con la ficha en
+blanco: `objetivo`, `conflicto` y `salida` vacíos. Eso no es un capítulo listo
+para N3, es un hueco.
+
+Rellénalo con N2 antes de escribir nada. Lanza el subagente `escaleta`
+diciéndole **qué capítulos concretos** faltan y que no toque los consolidados;
+te devuelve su ficha, la guardas en un fichero temporal y la persistes:
+
+```
+python scripts/consolidar.py sembrar-capitulo N <fichero>
+```
+
+`estado --json` te lo dice solo: mientras haya algo en `sin_ficha`,
+`siguiente_capitulo` viene a `null` y no se lanza N3. `contexto.py` también se
+niega. Son dos guardas para lo mismo, porque mandar a N3 con una ficha vacía no
+falla: produce un capítulo escrito a ciegas y te enteras una iteración después.
+
 ## El ciclo de un capítulo
 
 Para el capítulo N, con `iteracion` empezando en 1:
