@@ -38,7 +38,7 @@ Tres decisiones transversales que no son de stack pero condicionan todo lo demá
 ## 2. Módulos y límites
 
 ```
-src/
+backend/
   domain/        Clases de la ontología. Sin dependencias de infraestructura.
     diegetic/    Entidad, EventoNarrativo, Hecho, EstadoDeConocimiento, ReglaDelMundo
     discursive/  Escena, Capitulo, Hilo, ParSiembraPago, PerfilDeEstilo, Motivo
@@ -51,9 +51,10 @@ src/
   orchestrator/  Planificación, asignación, puertas, reintentos
   api/           FastAPI: rutas, esquemas Pydantic, SSE. Sin lógica de dominio.
   worker/        Consumidor de la cola de Tarea. Aquí viven las llamadas a modelos.
-web/             React. Editor de canon, lector de borradores, panel de defectos.
-migrations/      Esquema de SQLite, versionado y hacia delante.
-docs/            definitions.md, domain-knowledge.md, architecture.md, diagramas.
+  migrations/    Esquema de SQLite, versionado y hacia delante.
+frontend/        Vite + React. Editor de canon, lector de borradores, panel de defectos.
+docs/            definitions.md, domain-knowledge.md, architecture.md, verification.md.
+specs/           Una spec por cambio: qué se cambia y por qué.
 ```
 
 Reglas de dependencia:
@@ -64,11 +65,12 @@ Reglas de dependencia:
 - `agents/` no importa de `agents/`. La coordinación entre roles vive en `orchestrator/`.
 - Solo `store/` habla con SQLite y con el índice vectorial.
 - `api/` no invoca modelos. Encola tareas y lee estado.
-- `web/` no contiene reglas de dominio. Ninguna.
+- `frontend/` no contiene reglas de dominio. Ninguna, y nunca lee ficheros del sistema:
+  todo lo que muestra lo pide al `backend/`.
 
 ```mermaid
 flowchart TD
-    WEB[web · React] -->|HTTP + SSE| API[api · FastAPI]
+    WEB[frontend · Vite + React] -->|HTTP + SSE| API[backend/api · FastAPI]
     API -->|encola Tarea| Q[(cola)]
     Q --> W[worker]
     W --> ORC[orchestrator]
@@ -254,7 +256,7 @@ autoridad.
 | Acto cerrado | Fin de acto | Advertencia |
 | Volumen cerrado | Final | Bloqueante |
 
-Los invariantes de cada puerta viven como tests en `src/quality/`. Un invariante sin test
+Los invariantes de cada puerta viven como tests en `backend/quality/`. Un invariante sin test
 no existe.
 
 ### 5.3 Ciclo de vida de una escena

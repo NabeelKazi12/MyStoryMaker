@@ -12,8 +12,8 @@ coherencia verificable. El dominio está modelado como una ontología explícita
 planos (diegético, discursivo, producción) y tres capas transversales (especificación,
 contexto, calidad).
 
-El modelo completo está en `docs/ontologia-definiciones.md` y `docs/ontologia-diagramas.md`.
-**Léelos antes de tocar cualquier cosa bajo `src/domain/`.**
+El modelo completo está en `docs/definitions.md` y `docs/domain-knowledge.md`.
+**Léelos antes de tocar cualquier cosa bajo `backend/domain/`.**
 
 La tesis del proyecto: la calidad narrativa en texto largo no se consigue con mejores
 prompts, sino con estado estructurado y validaciones ejecutables. Cualquier cambio que
@@ -54,7 +54,7 @@ Consecuencias operativas:
   `ESTADO_CONOCIMIENTO`. Las validaciones de intervalos y de fugas epistémicas son las
   consultas más frecuentes del sistema.
 - **Índice vectorial**: extensión `sqlite-vec` en el mismo fichero, o un fichero aparte.
-  En cualquier caso, solo `store/` conoce la diferencia.
+  En cualquier caso, solo `backend/store/` conoce la diferencia.
 - **El canon versionado no se copia entero** por revisión. Guarda eventos de cambio y
   reconstruye por revisión; una copia por revisión no escala a 40 capítulos.
 
@@ -107,7 +107,7 @@ request/response para tareas de generación:
   bidireccionalidad real.
 - Un worker consume la cola. El proceso web no invoca modelos.
 - Los modelos Pydantic son la frontera de serialización, **no las clases del dominio**.
-  `src/domain/` no importa FastAPI ni Pydantic.
+  `backend/domain/` no importa FastAPI ni Pydantic.
 
 **Frontend.** React sirve tres vistas, y ninguna lleva lógica de dominio:
 
@@ -181,7 +181,7 @@ bug, no una mejora de contexto.
 ## 4. Arquitectura y límites de módulos
 
 ```
-src/
+backend/
   domain/        Clases de la ontología. Sin dependencias de infraestructura.
     diegetic/    Entidad, EventoNarrativo, Hecho, EstadoDeConocimiento, ReglaDelMundo
     discursive/  Escena, Capitulo, Hilo, ParSiembraPago, PerfilDeEstilo, Motivo
@@ -194,9 +194,10 @@ src/
   orchestrator/  Planificación, asignación, puertas, reintentos
   api/           FastAPI: rutas, esquemas Pydantic, SSE. Sin lógica de dominio.
   worker/        Consumidor de la cola de Tarea. Aquí viven las llamadas a modelos.
-web/             React. Editor de canon, lector de borradores, panel de defectos.
-migrations/      Esquema de SQLite, versionado y hacia delante.
-docs/            Ontología: definiciones y diagramas.
+  migrations/    Esquema de SQLite, versionado y hacia delante.
+frontend/        Vite + React. Editor de canon, lector de borradores, panel de defectos.
+docs/            Ontología, arquitectura y reparto de la verificación.
+specs/           Una spec por cambio: qué se cambia y por qué.
 ```
 
 Reglas de dependencia:
@@ -208,7 +209,8 @@ Reglas de dependencia:
   `orchestrator/`.
 - Solo `store/` habla con SQLite y con el índice vectorial.
 - `api/` no invoca modelos. Encola tareas y lee estado; el trabajo ocurre en `worker/`.
-- `web/` no contiene reglas de dominio. Ninguna.
+- `frontend/` no contiene reglas de dominio. Ninguna, y nunca lee ficheros del
+  sistema: todo lo que muestra lo pide al `backend/`.
 
 ### 4.1 Grafo vs. vectorial
 
@@ -267,21 +269,21 @@ uv sync                        # dependencias
 uv run pytest                  # suite completa
 uv run pytest -m invariants    # solo invariantes de dominio — corre esto siempre
 uv run ruff check . && uv run ruff format --check .
-uv run mypy src/
+uv run mypy backend/
 uv run alembic upgrade head    # migraciones de SQLite
 
-uv run uvicorn src.api.main:app --reload   # API en :8000
-uv run python -m src.worker                # worker de generación
+uv run uvicorn backend.api.main:app --reload   # API en :8000
+uv run python -m backend.worker                # worker de generación
 
 # Frontend
-cd web && npm install
-cd web && npm run dev          # Vite en :5173
-cd web && npm run build
-cd web && npm run lint
+cd frontend && npm install
+cd frontend && npm run dev     # Vite en :5173
+cd frontend && npm run build
+cd frontend && npm run lint
 
 # Dominio
-uv run python -m src.quality.validate --canon <ruta>   # verificación programática
-uv run python -m src.context.budget --escena <id>      # recuento de tokens del paquete
+uv run python -m backend.quality.validate --canon <ruta>   # verificación programática
+uv run python -m backend.context.budget --escena <id>      # recuento de tokens del paquete
 ```
 
 ## 7. Cómo trabajar aquí
@@ -299,7 +301,7 @@ Un invariante sin test no existe.
 
 ### 7.2 Cambios en el dominio
 
-Un cambio en `src/domain/` es un cambio en la ontología. Debe ir acompañado de:
+Un cambio en `backend/domain/` es un cambio en la ontología. Debe ir acompañado de:
 
 - Actualización de `docs/ontologia-definiciones.md`.
 - Actualización del diagrama correspondiente en `docs/ontologia-diagramas.md`.
@@ -331,8 +333,8 @@ consigo mismo mientras se separa del texto real.
 - No escribas en el canon desde un agente de generación.
 - No elimines el contador de reintentos de la máquina de estados. Es lo único que impide
   un bucle de revisión perpetua.
-- No añadas dependencias de red en `src/domain/`.
-- No invoques modelos desde `src/api/`. Encola una `Tarea`.
+- No añadas dependencias de red en `backend/domain/`.
+- No invoques modelos desde `backend/api/`. Encola una `Tarea`.
 - No duplique un invariante en el frontend. Si React necesita validar, llama a la API.
 - No hagas escrituras concurrentes a SQLite desde varios agentes.
 - No subas el presupuesto de tokens del paquete para que quepa. Aprieta los filtros.

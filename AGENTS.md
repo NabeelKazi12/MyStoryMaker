@@ -299,7 +299,7 @@ cuenta convierte errores detectables en deriva silenciosa.
 | Volumen cerrado | Final | Siembras resueltas, hilos resueltos, promesa al lector | Bloqueante |
 
 Los invariantes concretos de cada puerta están en el apartado 11 del documento de
-definiciones y viven como tests en `src/quality/`.
+definiciones y viven como tests en `backend/quality/`.
 
 ---
 
@@ -318,9 +318,103 @@ fallo más caro de estos sistemas.
 
 ---
 
-## 7. Prompts y procedencia
+## 7. Gestión de procesos
 
-- Un fichero por rol bajo `src/agents/<rol>/prompts/`, versionado semánticamente.
+Los apartados anteriores describen qué produce cada rol. Este describe cómo se ejecuta:
+ciclo de vida de una `Tarea`, concurrencia, presupuestos y recuperación. La ejecución
+vive en `backend/orchestrator/` (decide) y `backend/worker/` (invoca modelos); `api/`
+solo encola y lee estado.
+
+### 7.1 Ciclo de vida de una `Tarea`
+
+```
+pendiente → lista → en_curso → en_verificacion → aceptada
+                        │            │
+                        │            ├→ rechazada → (reintento: lista)
+                        │            └→ escalada  → (espera humano)
+                        ├→ fallida   → (reintento: lista)
+                        ├→ bloqueada → (falta contexto o dependencia)
+                        └→ cancelada
+```
+
+Una `Tarea` pasa a `lista` cuando todas sus `depende_de` están `aceptada`. Ningún otro
+criterio la desbloquea: si un plan necesita adelantar trabajo sobre una dependencia sin
+aceptar, el plan está mal descompuesto.
+
+Las transiciones las escribe **solo el Orquestador**. El worker informa del resultado de
+la invocación; no decide el estado. Esto mantiene una única autoridad sobre la máquina de
+estados y encaja con el escritor único de SQLite.
+
+El vocabulario de `Tarea.estado` es cerrado, como el resto de enumeraciones: añadir un
+valor requiere un `RegistroDeDecision` y actualizar `docs/definitions.md`.
+
+### 7.2 Planificación y concurrencia
+
+- El `Plan` es un DAG de `Tarea`s. Si aparece un ciclo, es un error de planificación y
+  se rechaza el plan entero; no se rompe el ciclo por heurística.
+- **Se paraleliza por escenas independientes**, no dentro de una escena. Redacción,
+  continuidad y juicio de una misma escena son secuenciales por construcción.
+- **Un solo escritor sobre el canon.** Las tareas que canonizan se serializan, aunque
+  las que las preceden hayan corrido en paralelo.
+- Dos tareas que dependan de la misma revisión del canon no pueden solaparse con una
+  canonización en curso. El Orquestador toma la revisión del canon como recurso
+  exclusivo, no como dato compartido.
+- El grado de paralelismo es configuración del Orquestador, no del worker. Un worker que
+  decide cuánto trabajo coger convierte el coste en algo impredecible.
+
+### 7.3 Presupuestos y límites
+
+Toda `Tarea` lleva `presupuesto` en tokens, coste y tiempo, y los tres se comprueban:
+
+- **Tokens.** El ensamblador cuenta antes de llamar y rechaza el paquete si excede.
+  Excederse es `bloqueada` con `falta`, no truncar.
+- **Tiempo.** Una invocación sin respuesta dentro de su límite se cancela y cuenta como
+  intento. Una tarea colgada bloquea todo su subárbol de dependencias.
+- **Coste.** El plan tiene un techo acumulado. Al alcanzarlo, el Orquestador no degrada
+  la calidad en silencio: detiene la ejecución y escala.
+
+Un presupuesto que solo se registra y nunca se hace cumplir es documentación, no control.
+
+### 7.4 Idempotencia y reanudación
+
+- Una `Tarea` se identifica por `(plan, objetivo, revision_de_canon, hash_del_paquete,
+  version_de_prompt, intento)`. Reejecutar con la misma clave devuelve el artefacto ya
+  producido en lugar de volver a invocar el modelo.
+- El estado vive en SQLite, no en memoria del worker. Si el proceso cae, el Orquestador
+  reconstruye la cola desde la tabla de `Tarea`.
+- Al arrancar, toda `Tarea` que quedó `en_curso` sin `Procedencia` registrada vuelve a
+  `lista` y suma un intento. Si la `Procedencia` está registrada pero no el artefacto,
+  la invocación se pagó y se perdió: queda anotado, porque es la métrica que revela
+  caídas recurrentes del worker.
+- La escritura del artefacto y la transición de estado ocurren en la misma transacción.
+  Separarlas produce borradores huérfanos y tareas que parecen pendientes con el trabajo
+  ya hecho.
+
+### 7.5 Cancelación e invalidación
+
+- Cancelar una `Tarea` cancela su subárbol de dependientes; los artefactos ya producidos
+  se marcan `obsoleto`, nunca se borran.
+- Si el canon cambia bajo una tarea `en_curso`, su resultado se descarta al volver: se
+  generó contra una revisión que ya no es la vigente. Aceptarlo "porque está bien
+  escrito" es exactamente cómo entra la deriva.
+- La invalidación en cascada de `UnidadDeContexto` es parte del cierre de la
+  canonización, no un trabajo posterior opcional.
+
+### 7.6 Observabilidad
+
+- Cada transición de estado emite un evento con marca de tiempo; la API lo retransmite
+  por SSE (`/tareas/{id}/eventos`). El frontend no hace polling ni infiere progreso.
+- Por `Tarea` se registran intentos, coste acumulado, latencia y tipo de `Defecto` que
+  provocó cada rechazo. Los reintentos por tipo de defecto son la señal que dice si lo
+  que falla es la redacción o el plan.
+- Una tarea `escalada` es visible sin buscarla. Un escalado que nadie ve es un sistema
+  parado que parece lento.
+
+---
+
+## 8. Prompts y procedencia
+
+- Un fichero por rol bajo `backend/agents/<rol>/prompts/`, versionado semánticamente.
 - Editar un prompt sin incrementar su versión rompe la reproducibilidad de todo lo
   generado antes. No lo hagas.
 - Cada llamada registra `Procedencia` con `agente`, `modelo`, `version_de_prompt`, `hash`
@@ -330,7 +424,7 @@ fallo más caro de estos sistemas.
 
 ---
 
-## 8. Registro de decisiones
+## 9. Registro de decisiones
 
 Toda decisión creativa no trivial se registra como `RegistroDeDecision` con su
 alternativa descartada y su motivo.
