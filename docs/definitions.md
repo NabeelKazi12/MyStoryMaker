@@ -1,0 +1,602 @@
+[definitions.md](https://github.com/user-attachments/files/32475074/definitions.md)
+# Ontología para generación agéntica de novelas — Definiciones
+
+2026-09-21 · @Nabeel
+
+## Propósito y alcance
+
+Esta ontología existe para que un sistema multiagente pueda escribir una novela de 80.000–150.000 palabras sin perder coherencia, y para poder demostrarlo con comprobaciones automáticas en lugar de lectura humana completa.
+
+Resuelve cuatro fallos concretos que aparecen siempre en generación de texto largo:
+
+1. **Deriva de canon.** Un personaje tiene los ojos verdes en el capítulo 2 y grises en el 19. Sin hechos con vigencia temporal explícita no hay nada contra lo que validar.
+2. **Fuga epistémica.** Un personaje actúa usando información que aún no ha recibido. Es el fallo más difícil de detectar leyendo y el más letal para el misterio y la tensión.
+3. **Cabos sueltos.** Se siembra un objeto, una amenaza o una promesa y nunca se paga.
+4. **Saturación de contexto.** A partir de \~40.000 palabras no cabe el texto previo en la ventana, y resumirlo de forma ingenua borra justo los detalles que hacen falta.
+
+Queda dentro del alcance: el modelo conceptual del dominio, los atributos e invariantes de cada clase, y las políticas de contexto y calidad. Queda fuera: la arquitectura de despliegue, la elección de modelos y los prompts concretos.
+
+El documento hermano contiene los diagramas Mermaid del mismo modelo.
+
+## Principios de modelado
+
+El dominio se divide en tres planos y tres capas transversales; confundirlos es la causa raíz de la mayoría de los fallos de coherencia.
+
+| Plano / capa | Pregunta que responde | Clase pivote |
+| --- | --- | --- |
+| Diegético (*fabula*) | ¿Qué es verdad en el mundo y cuándo? | `EventoNarrativo` |
+| Discursivo (*syuzhet*) | ¿Cómo se cuenta y en qué orden? | `Escena` |
+| Producción | ¿Quién lo generó, con qué y con qué resultado? | `Borrador` |
+| Especificación | ¿Qué se pidió y qué restringe? | `Brief` |
+| Contexto | ¿Qué ve el agente en cada llamada? | `PaqueteDeContexto` |
+| Calidad | ¿Está bien y cómo lo sabemos? | `Juicio` |
+
+Cinco principios rigen el modelo:
+
+1. **Separar historia de relato.** Un `EventoNarrativo` ocurre en tiempo de historia; una `Escena` lo narra en tiempo de relato. La relación entre ambos es de muchos a muchos: una escena puede narrar varios eventos, y un evento puede aparecer en varias escenas (flashback, relato de un testigo, revelación).
+2. **Nada es atemporal.** Todo hecho del mundo es válido en un intervalo delimitado por eventos, no por fechas absolutas. Los atributos estáticos son el origen de la deriva de canon.
+3. **El conocimiento es una relación, no un atributo.** Quién sabe qué, desde cuándo y con qué grado de certeza es información de primera clase.
+4. **Las promesas narrativas son objetos.** Siembras, misterios y arcos se modelan como pares con estado, no como notas en prosa.
+5. **Todo artefacto generado lleva procedencia.** Sin registrar qué contexto exacto recibió un agente, un fallo de coherencia no es depurable.
+
+Una consecuencia práctica: el canon nunca se almacena como prosa. La prosa es la salida; el canon es la estructura de la que se deriva y contra la que se valida.
+
+## Convenciones de notación
+
+Cada clase se documenta con el mismo esqueleto: definición en una frase, atributos con tipo, relaciones salientes con cardinalidad, e invariantes.
+
+- Nombres de clase en `PascalCase`, relaciones en `snake_case`.
+- Cardinalidad al estilo UML: `1`, `0..1`, `1..*`, `*`.
+- Los atributos marcados **(D)** son derivados: se calculan, no se escriben a mano.
+- Los atributos marcados **(C)** son canónicos: solo cambian por promoción desde un borrador aceptado.
+- El tiempo de historia se expresa siempre en relación a eventos (`válido_desde: EventoNarrativo`), nunca como fecha suelta, salvo en obras con calendario explícito, donde la fecha es un atributo adicional del evento.
+
+## Plano diegético — el canon
+
+Este plano contiene todo lo que es verdad dentro del mundo ficcional, con independencia de si ya se ha narrado.
+
+### Entidad (abstracta)
+
+Cualquier cosa a la que el relato pueda referirse de forma persistente.
+
+Atributos: `id`, `nombre_canónico`, `alias[]`, `primera_aparición` (D: escena), `estatus_ontológico` (real en la diégesis / rumor / legendario / inventado por un personaje), `relevancia` (protagónico / secundario / ambiental).
+
+El `estatus_ontológico` importa: permite que el sistema maneje información falsa dentro de la ficción sin corromper el canon.
+
+Subclases: `Personaje`, `Lugar`, `Objeto`, `Organización`, `Lore`.
+
+### Personaje
+
+Entidad con agencia, capaz de querer, saber y actuar.
+
+Atributos: `deseo_externo` (lo que persigue), `necesidad_interna` (lo que le falta y no reconoce), `herida_de_origen`, `creencia_falsa`, `rasgos[]`, `contradicción_definitoria`, `arco` (tipo y estado), `nivel_de_agencia`, `función_dramática[]`, `idiolecto` → `PerfilDeEstilo`, `descripción_física` (C).
+
+`creencia_falsa` no es adorno: es la palanca del arco y lo que hace que las decisiones del personaje sean predecibles para el planificador y sorprendentes para el lector.
+
+Invariante: todo personaje protagónico tiene al menos un `Hilo` asociado y una `necesidad_interna` no vacía.
+
+### Lugar
+
+Entidad espacial donde pueden situarse escenas y eventos.
+
+Atributos: `tipo`, `contiene` / `contenido_en` (jerarquía espacial), `atmósfera_sensorial` (paleta de detalles reutilizables), `accesibilidad` (quién puede entrar y bajo qué condición), `distancia_a[]`.
+
+La `atmósfera_sensorial` resuelve un problema real: sin un banco de detalles por lugar, cada visita se describe con vocabulario distinto y el lugar deja de sentirse el mismo.
+
+### Objeto
+
+Entidad material con capacidad de cambiar de poseedor o de estado.
+
+Atributos: `poseedor_actual` (D, derivado de eventos), `estado_físico`, `significado_simbólico`, `es_siembra` (booleano), `propiedades_especiales[]`.
+
+### Organización
+
+Entidad colectiva con intereses propios: familia, gremio, gobierno, culto, empresa.
+
+Atributos: `miembros[]` con rol y vigencia, `objetivo`, `recursos`, `jerarquía`, `relación_con[]` otras organizaciones.
+
+### Lore
+
+Conocimiento del mundo que no es una cosa concreta: mitos, historia, idiomas, costumbres, sistemas mágicos o tecnológicos.
+
+Atributos: `dominio`, `veracidad_en_la_diégesis`, `quién_lo_conoce[]`, `nivel_de_revelación_al_lector`.
+
+### ReglaDelMundo
+
+Restricción invariable de la física, magia, sociedad o tecnología del mundo.
+
+Atributos: `enunciado`, `ámbito`, `coste` (qué cuesta usarla), `excepciones[]`, `revelada_en` (escena).
+
+Invariante crítico: ningún `EventoNarrativo` puede violar una `ReglaDelMundo` activa sin invocar una excepción declarada. Esta es la comprobación que preserva la credibilidad del mundo.
+
+### EventoNarrativo
+
+Ocurrencia atómica y fechable en tiempo de historia que cambia el estado del mundo. Es la clase pivote del plano.
+
+Atributos: `id`, `descripción`, `posición_en_tiempo_de_historia` (orden parcial u ordinal), `duración`, `lugar`, `participantes[]` con rol (agente / paciente / testigo / mencionado), `tipo` (acción, decisión, revelación, encuentro, muerte, cambio de estado), `visibilidad` (público / privado / secreto), `es_narrado` (D).
+
+Relaciones: `causa` / `posibilita` / `impide` → `EventoNarrativo` (`*`), `establece` → `Hecho` (`*`), `invalida` → `Hecho` (`*`), `narrado_por` → `Escena` (`*`).
+
+Dos invariantes: el grafo de causalidad es acíclico, y si A causa B entonces A precede a B en tiempo de historia.
+
+### Hecho
+
+Proposición sobre el mundo verdadera durante un intervalo delimitado por eventos.
+
+Atributos: `sujeto` → Entidad, `predicado`, `objeto`, `válido_desde` → EventoNarrativo, `válido_hasta` → EventoNarrativo (`0..1`; nulo = vigente), `certeza`, `establecido_en` → Escena (dónde se canoniza ante el lector), `es_público`.
+
+Invariante: dos hechos con el mismo sujeto y predicado mutuamente excluyente no pueden tener intervalos de validez solapados. Esta única regla elimina la mayor parte de las contradicciones de continuidad.
+
+### EstadoDePersonaje
+
+Valor de un atributo variable de un personaje en un intervalo: salud, posición, lealtad, estado emocional, recursos, reputación.
+
+Atributos: `personaje`, `dimensión`, `valor`, `válido_desde`, `válido_hasta`, `causado_por` → EventoNarrativo.
+
+Es una especialización de `Hecho` con dimensiones enumeradas, para poder consultar trayectorias emocionales y dibujar la curva del arco.
+
+### EstadoDeConocimiento
+
+Qué sabe un personaje sobre un hecho, desde cuándo y con qué exactitud. La clase que más fallos previene y que casi ningún sistema incluye.
+
+Atributos: `conocedor` → Personaje, `hecho` → Hecho, `estatus` (ignora / sospecha / cree\_falsamente / sabe / sabe\_y\_oculta), `adquirido_en` → EventoNarrativo, `fuente` (testigo directo / le fue contado / deducción / documento), `fiabilidad_de_la_fuente`, `sabe_que_X_sabe` → recursivo (`*`).
+
+Invariante: un personaje no puede actuar en un evento apoyándose en un hecho cuyo `EstadoDeConocimiento` sea `ignora` en ese punto de la línea temporal.
+
+El anidamiento recursivo (`sabe_que_X_sabe`) es lo que permite construir engaño, ironía dramática y suspense de forma deliberada en lugar de accidental.
+
+### Relación
+
+Vínculo entre dos entidades, con vigencia y valencia.
+
+Atributos: `origen`, `destino`, `tipo` (parentesco, alianza, rivalidad, deuda, amor, jerarquía), `valencia` (−5..+5), `simetría`, `válido_desde`, `válido_hasta`, `conocida_por[]`.
+
+La valencia con vigencia temporal permite graficar la evolución de una relación y detectar cambios sin escena que los justifique.
+
+### LíneaTemporal
+
+Ordenación completa de eventos en tiempo de historia, incluidos los anteriores al inicio del relato.
+
+Atributos: `eventos_ordenados[]`, `granularidad`, `calendario` (opcional), `ramas[]` (para realidades alternativas o viajes temporales).
+
+Invariante: todo evento narrado tiene posición asignada en al menos una línea temporal.
+
+## Plano discursivo — el relato
+
+Este plano describe cómo se selecciona, ordena y verbaliza el material diegético. La `Escena` es su unidad atómica y la unidad de trabajo de los agentes.
+
+### Jerarquía contenedora
+
+`Serie` → `Volumen` → `Parte` / `Acto` → `Capítulo` → `Escena` → `Beat` → `Párrafo`
+
+Cada nivel tiene `presupuesto_de_palabras` (objetivo y tolerancia), `orden` y `resumen` (D). El presupuesto es lo que impide que el acto tercero se coma el 60% del libro.
+
+### Escena
+
+Unidad continua de narración en un lugar, un tiempo y un punto de vista, que produce un cambio de valor.
+
+| Atributo | Para qué sirve |
+| --- | --- |
+| `pov` → Personaje | Filtra qué puede narrarse y qué se sabe |
+| `focalización` | Interna, externa, omnisciente |
+| `distancia_narrativa` | De panorámica a pensamiento íntimo |
+| `tiempo_verbal`, `persona` | Consistencia gramatical verificable |
+| `escenario` → Lugar | Continuidad sensorial |
+| `momento_en_historia` | Ancla en la línea temporal |
+| `objetivo`, `conflicto`, `resultado` | Estructura interna mínima |
+| `valor_de_entrada` → `valor_de_salida` | El cambio que justifica la escena |
+| `carga_emocional_entrada/salida` | Curva emocional y variación de ritmo |
+| `función_en_trama` | Detonante, giro, revelación, clímax, secuela |
+| `tipo` | Escena de acción vs. secuela reflexiva |
+| `presupuesto_de_palabras` | Control de ritmo |
+| `renderiza` → EventoNarrativo (`1..*`) | El puente con el plano diegético |
+| `hilos_activos[]` → Hilo | Qué subtramas avanza |
+
+Invariante: `valor_de_entrada ≠ valor_de_salida`. Una escena en la que nada cambia es una escena que sobra, y esto es comprobable automáticamente.
+
+Segundo invariante: toda escena narra al menos un evento. Si no, es exposición disfrazada.
+
+### Beat
+
+Subdivisión de una escena: un intercambio, un gesto, un giro menor. Atributos: `tipo` (acción / reacción / diálogo / pensamiento / descripción), `duración_relativa`, `intención`.
+
+Sirve para dos cosas: dar al redactor una estructura antes de escribir prosa, y medir la proporción diálogo/narración/descripción sin analizar el texto a posteriori.
+
+### Narración
+
+Configuración de voz del relato, global o por sección.
+
+Atributos: `persona` (1ª, 2ª, 3ª), `tipo_de_narrador`, `fiabilidad`, `acceso_a_conciencias[]`, `temporalidad` (simultánea, retrospectiva), `ironía_permitida`.
+
+Modelarla explícitamente permite validar que una escena en tercera limitada no filtre pensamientos de otro personaje: el error de POV más frecuente.
+
+### Hilo (subtrama)
+
+Secuencia de escenas que desarrolla una línea de tensión hasta su resolución.
+
+Atributos: `tipo` (principal, romántica, de misterio, temática, de personaje), `protagonista`, `pregunta_dramática`, `curva_de_tensión[]` (tensión objetivo por escena), `estado`, `escenas[]` ordenadas, `resolución` → Escena.
+
+Invariantes: ningún hilo puede estar inactivo más de N escenas consecutivas (parámetro por tipo de hilo), y todo hilo abierto tiene resolución o abandono declarado antes del final.
+
+### PlantillaEstructural
+
+Esquema de referencia con beats esperados y su posición relativa: tres actos, viaje del héroe, *Save the Cat*, kishōtenketsu, estructura en siete puntos.
+
+Atributos: `nombre`, `beats_esperados[]` con `posición_relativa` (0.0–1.0) y `tolerancia`, `género_afín[]`, `obligatoriedad`.
+
+Se usa como referencia de conformidad, no como molde: el sistema informa de desviaciones, y la decisión de aceptarlas se registra en un `RegistroDeDecisión`.
+
+### Motivo y Tema
+
+`Tema` es la pregunta moral o conceptual que la obra explora; `Motivo` es su vehículo concreto y repetible (una imagen, un objeto, una frase, un color).
+
+Atributos de `Motivo`: `manifestación`, `apariciones[]` → Escena, `frecuencia_objetivo`, `evolución_semántica`, `vinculado_a` → Tema.
+
+La `frecuencia_objetivo` tiene un uso doble: garantiza que el motivo aparezca lo suficiente para leerse como intencional, y detecta cuándo se ha vuelto insistente.
+
+### PerfilDeEstilo
+
+Contrato de voz aplicable a la obra entera o a un personaje.
+
+Atributos: `longitud_media_de_frase` y varianza, `registro`, `densidad_léxica`, `uso_de_metáfora`, `proporción_diálogo`, `tics_verbales[]`, `vocabulario_prohibido[]`, `vocabulario_característico[]`, `puntuación_preferida`, `ejemplos_de_referencia[]`.
+
+El `vocabulario_prohibido` es, en la práctica, la defensa más eficaz contra el vocabulario delator de los modelos de lenguaje.
+
+### ParSiembraPago
+
+Promesa narrativa con su cumplimiento: el rifle de Chéjov como objeto de primera clase.
+
+Atributos: `descripción_de_la_promesa`, `tipo` (objeto, habilidad, información, amenaza, relación, pregunta), `escena_de_siembra`, `escena_de_pago` (`0..1`), `estado` (abierto / resuelto / subvertido / abandonado), `sutileza` (1–5), `distancia_máxima_aceptable`.
+
+Invariante: al final de la obra, ningún par queda en estado `abierto`. Esto convierte los cabos sueltos en una lista de tareas verificable en lugar de una impresión de lectura.
+
+## Plano de producción agéntica
+
+Este plano modela el trabajo: quién hizo qué, con qué entrada y con qué resultado. Es lo que hace el sistema depurable.
+
+### RolDeAgente
+
+Función especializada con responsabilidad, permisos de escritura y herramientas propias.
+
+| Rol | Escribe en | Responsabilidad |
+| --- | --- | --- |
+| Orquestador | Tarea, Plan | Descompone y asigna; no escribe prosa |
+| Arquitecto | Hilo, Escena (esqueleto), PlantillaEstructural | Estructura global y outline |
+| Worldbuilder | Entidad, ReglaDelMundo, Lore | Consistencia del mundo |
+| Guardián de Continuidad | Defecto | Solo lectura sobre el canon; solo reporta |
+| Redactor | Borrador | Prosa de escena |
+| Editor de línea | Revisión | Ritmo, claridad, voz frase a frase |
+| Editor de desarrollo | Crítica | Estructura, motivación, arco |
+| Crítico / Juez | Juicio | Puntuación contra rúbrica |
+| Investigador | Lore, Hecho | Verosimilitud factual |
+| Entrenador de voz | PerfilDeEstilo | Idiolecto y consistencia de voz |
+
+El principio de diseño más importante aquí: **el Guardián de Continuidad no escribe prosa y el Redactor no escribe canon**. Separar quien genera de quien valida evita que el mismo agente racionalice sus propias incoherencias.
+
+### Tarea
+
+Unidad de trabajo asignable. Atributos: `tipo`, `objetivo`, `rol_asignado`, `entradas[]`, `salida_esperada`, `criterios_de_aceptación[]`, `estado`, `intentos`, `depende_de[]`, `presupuesto` (tokens, coste, tiempo).
+
+### Plan
+
+Árbol de tareas con dependencias que produce un artefacto de nivel superior: un capítulo, un acto, el outline completo.
+
+### Borrador
+
+Versión concreta de la prosa de una escena o capítulo.
+
+Atributos: `escena`, `versión`, `texto`, `estado` (propuesto / en\_revisión / aceptado / rechazado / obsoleto), `recuento_de_palabras`, `procedencia` → Procedencia, `hechos_nuevos_detectados[]` (candidatos a canonización).
+
+Invariante: solo un borrador por escena puede estar en estado `aceptado`. El canon se deriva de los aceptados.
+
+### Revisión y Diff
+
+`Revisión` es un cambio propuesto sobre un borrador, con `motivo` y `crítica_que_la_origina`. `Diff` registra el cambio a nivel de span para poder auditar qué se tocó y por qué.
+
+Retener el diff permite algo valioso: medir si las revisiones mejoran las puntuaciones o solo mueven el texto.
+
+### Crítica
+
+Observación evaluativa sobre un artefacto, emitida por un agente.
+
+Atributos: `objetivo` (borrador y span), `dimensión`, `severidad`, `diagnóstico`, `sugerencia`, `estado` (abierta / aceptada / rechazada / resuelta), `emitida_por`.
+
+El estado `rechazada` con justificación es necesario: sin él, el sistema entra en bucles de revisión perpetua atendiendo críticas cuestionables.
+
+### Puerta (Gate)
+
+Condición que debe cumplirse para avanzar de fase. Atributos: `fase`, `comprobaciones[]`, `política` (bloqueante / advertencia), `resultado`, `excepciones_autorizadas[]`.
+
+Las puertas típicas: outline aprobado antes de redactar, continuidad limpia antes de cerrar capítulo, siembras resueltas antes de cerrar el volumen.
+
+### RegistroDeDecisión
+
+Decisión creativa tomada, con su alternativa descartada y su motivo.
+
+Atributos: `decisión`, `alternativas_consideradas[]`, `motivo`, `ámbito_afectado`, `reversible`, `tomada_en`.
+
+En obras largas la deriva rara vez viene de mala prosa: viene de decisiones olvidadas y luego contradichas sin darse cuenta.
+
+### Procedencia
+
+Registro de cómo se generó un artefacto: `agente`, `modelo`, `versión_de_prompt`, `paquete_de_contexto` → PaqueteDeContexto, `parámetros_de_muestreo`, `coste`, `latencia`, `timestamp`.
+
+El enlace al `PaqueteDeContexto` es el atributo que convierte un fallo de coherencia en algo reproducible: permite ver exactamente qué sabía el agente cuando falló.
+
+## Capa de especificación
+
+Es el contrato del encargo: lo que la capa de calidad usa como referencia para medir.
+
+### Brief
+
+Atributos: `género`, `subgénero`, `obras_comparables[]`, `audiencia`, `tono`, `extensión_objetivo`, `pov_objetivo`, `premisa`, `logline`, `promesa_al_lector`, `tabúes[]`, `idioma`, `mercado`.
+
+La `promesa_al_lector` merece atención especial: es el compromiso implícito del género (un misterio se resuelve, un romance culmina) y su incumplimiento es el fallo de calidad más grave y menos detectable frase a frase.
+
+### Restricción
+
+Condición que limita las salidas válidas.
+
+Atributos: `enunciado`, `dureza` (dura = bloquea publicación / blanda = penaliza puntuación), `ámbito`, `verificable_por` (programa / juez / humano), `origen` (usuario / género / legal / editorial).
+
+Distinguir dura de blanda es lo que permite que el orquestador decida si reintenta o acepta con penalización, en lugar de reintentar indefinidamente.
+
+### ContratoDeEstilo
+
+Instancia de `PerfilDeEstilo` elevada a obligación contractual, con umbrales numéricos y márgenes de tolerancia.
+
+### PolíticaDeContenido
+
+Límites sobre materia sensible: violencia, sexo, lenguaje, representación de grupos, temas prohibidos.
+
+Atributos: `categoría`, `nivel_permitido`, `tratamiento_requerido`, `aplicable_a` (ámbito).
+
+## Capa de contexto
+
+La gestión de contexto se modela como entidades del dominio, no como lógica suelta en el código. Es la decisión que más diferencia hay entre un prototipo y un sistema que aguanta 120.000 palabras.
+
+### UnidadDeContexto
+
+Fragmento de información recuperable con un nivel de granularidad declarado.
+
+Atributos: `nivel`, `contenido`, `deriva_de[]` (trazabilidad hacia arriba), `vigencia` (rev del canon con la que se generó), `tokens`, `embedding`.
+
+Los niveles forman una pirámide de resumen multirresolución:
+
+| Nivel | Extensión típica | Uso |
+| --- | --- | --- |
+| Premisa de serie | 1–2 frases | Siempre presente |
+| Sinopsis de volumen | 200–400 palabras | Siempre presente |
+| Resumen de parte | 100–200 palabras | Partes distintas de la actual |
+| Resumen de capítulo | 50–100 palabras | Capítulos anteriores |
+| Resumen de escena | 1–3 frases | Escenas de la parte actual |
+| Prosa literal | Completa | Escena inmediatamente anterior |
+
+La regla operativa: cuanto más cerca está el material del punto de escritura, mayor resolución recibe. Solo la escena anterior entra literal, y entra porque la continuidad de tono y de última frase no sobrevive al resumen.
+
+### Canon (Story Bible)
+
+Almacén estructurado y normalizado de hechos, entidades, eventos y reglas: la fuente única de verdad.
+
+Atributos: `revisión`, `hechos[]`, `entidades[]`, `eventos[]`, `reglas[]`, `última_canonización`.
+
+No contiene prosa. Esta restricción es deliberada: en cuanto el canon admite prosa, deja de ser consultable y vuelve a ser un documento que alguien debe leer entero.
+
+### PaqueteDeContexto
+
+Objeto de primera clase que registra exactamente qué se inyectó a un agente en una llamada.
+
+Atributos: `tarea`, `unidades[]` con orden y tokens, `presupuesto_de_tokens`, `política_aplicada`, `hash`.
+
+Composición típica para redactar una escena:
+
+1. **Estático**: premisa, contrato de estilo, plantilla estructural, políticas de contenido.
+2. **Estado del mundo**: hechos vigentes de las entidades presentes en la escena, filtrados por el momento en la línea temporal.
+3. **Continuidad inmediata**: prosa literal de la escena anterior, últimos párrafos completos.
+4. **Arco**: resumen del capítulo y del hilo activo, con posición en su curva de tensión.
+5. **Voz**: `PerfilDeEstilo` global más el idiolecto de los personajes con diálogo.
+6. **Epistémico**: estado de conocimiento del personaje POV — lo que puede y no puede saber.
+7. **Promesas**: siembras abiertas con distancia al límite y motivos pendientes de aparición.
+8. **Instrucción**: objetivo, conflicto, resultado y presupuesto de palabras de la escena.
+
+Guardar el paquete con su `hash` cuesta poco y resuelve la pregunta que siempre aparece al depurar: ¿el agente se equivocó, o nunca recibió el dato?
+
+### AlcanceDeRelevancia
+
+Filtro que decide qué entra en un paquete. Tres dimensiones combinadas:
+
+- **Temporal**: solo hechos vigentes en el momento de historia de la escena. Un hecho invalidado en el capítulo 8 no debe aparecer al escribir el 12.
+- **Epistémico**: en POV limitado, solo lo que el narrador puede conocer. Este filtro es lo que impide la fuga de información.
+- **Estructural**: hilos activos, entidades presentes o mencionadas, motivos del acto en curso.
+
+### Políticas
+
+**Canonización.** Cuando un borrador pasa a `aceptado`, sus `hechos_nuevos_detectados` se extraen, se normalizan, se comprueban contra el canon y se promueven. Los que contradicen el canon generan un `Defecto` en lugar de sobrescribir.
+
+**Invalidación en cascada.** Si se reescribe una escena, se marcan obsoletos: sus resúmenes, los resúmenes de todo contenedor que la incluye, los hechos que establecía, y los paquetes de contexto que la citaban.
+
+Sin dependencias explícitas, el sistema acumula lo que en la práctica es canon fantasma: hechos que ya nadie narra pero que siguen condicionando las escenas siguientes. Es el fallo más insidioso de todos porque el sistema sigue pareciendo coherente consigo mismo mientras se separa del texto real.
+
+## Capa de calidad
+
+Cada dimensión de calidad se clasifica por **cómo se verifica**, porque eso determina si se puede poner en una puerta bloqueante o solo informar.
+
+### Clases
+
+- **DimensiónDeCalidad**: `nombre`, `definición`, `modo_de_verificación`, `escala`, `peso`, `nivel_aplicable` (frase / escena / capítulo / obra).
+- **Rúbrica**: conjunto de dimensiones con descriptores por nivel y ejemplos ancla. Los ejemplos ancla son lo que hace reproducible a un juez LLM.
+- **Juicio**: `objetivo`, `dimensión`, `puntuación`, `justificación`, `juez`, `confianza`, `rúbrica_usada`, `timestamp`.
+- **Defecto**: `tipo`, `severidad`, `span`, `evidencia`, `regla_violada`, `estado`, `detectado_por`.
+- **UmbralDeAceptación**: `dimensión`, `mínimo`, `política_si_falla` (reescribir / marcar / escalar a humano), `máximo_de_reintentos`.
+
+### Dimensiones verificables por programa
+
+Son las que pueden bloquear una puerta, porque su resultado es determinista.
+
+| Comprobación | Regla |
+| --- | --- |
+| Violación de línea temporal | Evento usado antes de su causa |
+| Contradicción de hechos | Intervalos de validez solapados con predicados excluyentes |
+| Fuga epistémica | Personaje actúa sobre un hecho que ignora |
+| Disciplina de POV | Acceso a conciencias no autorizado por `Narración` |
+| Consistencia de tiempo y persona | Deriva gramatical entre escenas |
+| Repetición de n-gramas | Trigramas y tetragramas repetidos entre capítulos |
+| Diversidad léxica | Type-token ratio y vocabulario delator |
+| Siembras sin pagar | Pares en estado `abierto` pasado su límite |
+| Conformidad estructural | Desviación de beats respecto a la plantilla |
+| Presupuesto de palabras | Desvío por acto y capítulo |
+| Deriva de nombres | Alias no declarados, ortografía inconsistente |
+
+La repetición de n-gramas merece prioridad: es el fallo más característico de los modelos de lenguaje en texto largo, invisible dentro de una escena y muy visible al leer el libro seguido. Un agente que escribe la escena 40 sin ver las 39 anteriores repetirá sus propias imágenes favoritas.
+
+### Dimensiones evaluadas por juez LLM
+
+Naturalidad del diálogo, densidad de cliché, consistencia de motivación, coherencia temática, impacto emocional, tensión y curiosidad, especificidad sensorial, exposición forzada (*infodumping*), variedad sintáctica percibida.
+
+Dos reglas para que sirvan: el juez no puede ser el mismo agente que escribió, y la puntuación va siempre acompañada de `confianza` para poder descartar juicios inestables.
+
+### Dimensiones humanas
+
+Valor literario, adecuación al mercado, originalidad, satisfacción de la promesa al lector. No se automatizan; se muestrean.
+
+### Invariantes tipo test
+
+El modelo permite escribir aserciones ejecutables sobre la obra, igual que pruebas sobre código:
+
+- Ningún personaje conoce el hecho `F` antes de la escena `S`.
+- Todo `ParSiembraPago` está resuelto o subvertido al final del volumen.
+- Ninguna imagen del catálogo de motivos aparece más de `N` veces.
+- Todo hilo principal tiene al menos una escena cada `M` capítulos.
+- Ningún capítulo excede su presupuesto en más del `X%`.
+
+## Catálogo de relaciones
+
+Estas son las aristas que cruzan planos y sostienen las validaciones. Las intra-plano quedan descritas en cada clase.
+
+| Relación | Dominio | Rango | Card. | Para qué |
+| --- | --- | --- | --- | --- |
+| `renderiza` | Escena | EventoNarrativo | `1..*` | Puente historia ↔ relato |
+| `establece` | EventoNarrativo | Hecho | `*` | Origen del canon |
+| `invalida` | EventoNarrativo | Hecho | `*` | Cierre de vigencia |
+| `establecido_en` | Hecho | Escena | `0..1` | Dónde lo sabe el lector |
+| `conoce` | Personaje | Hecho | `*` | Vía EstadoDeConocimiento |
+| `participa_en` | Entidad | EventoNarrativo | `*` | Con rol |
+| `causa` | EventoNarrativo | EventoNarrativo | `*` | Grafo causal acíclico |
+| `avanza` | Escena | Hilo | `1..*` | Actividad de subtramas |
+| `siembra` / `paga` | Escena | ParSiembraPago | `*` | Promesas |
+| `manifiesta` | Escena | Motivo | `*` | Tejido temático |
+| `conforma_a` | Escena | Beat de plantilla | `0..1` | Conformidad estructural |
+| `narrada_por` | Escena | Narración | `1` | Reglas de POV |
+| `habla_con_voz` | Personaje | PerfilDeEstilo | `0..1` | Idiolecto |
+| `borrador_de` | Borrador | Escena | `1` | Producción |
+| `evalúa` | Juicio | Borrador | `1` | Calidad |
+| `reporta` | Defecto | Borrador o Canon | `1` | Trazabilidad del fallo |
+| `contextualizado_por` | Procedencia | PaqueteDeContexto | `1` | Depuración |
+| `deriva_de` | UnidadDeContexto | UnidadDeContexto | `*` | Cascada de resúmenes |
+| `restringe` | Restricción | cualquier clase | `*` | Contrato |
+
+La arista `deriva_de` es la que hace posible la invalidación en cascada; sin ella, los resúmenes obsoletos no son detectables.
+
+## Invariantes y reglas de validación
+
+Las reglas se agrupan por severidad, que determina qué hace el orquestador al detectarlas.
+
+### Bloqueantes (impiden aceptar el borrador)
+
+1. Grafo causal sin ciclos.
+2. Si A causa B, A precede a B en tiempo de historia.
+3. Sin intervalos de validez solapados para predicados mutuamente excluyentes.
+4. Ningún personaje actúa sobre un hecho que ignora en ese momento.
+5. Ninguna escena filtra conciencias que su `Narración` no autoriza.
+6. Ningún evento viola una `ReglaDelMundo` activa sin excepción declarada.
+7. Toda escena narra al menos un evento.
+8. Un solo borrador `aceptado` por escena.
+
+### De cierre (se comprueban en la puerta de fin de volumen)
+
+1. Ningún `ParSiembraPago` en estado `abierto`.
+2. Todo hilo con resolución o abandono declarado.
+3. Toda pregunta dramática de hilo principal respondida.
+4. Arco de cada protagónico con estado terminal.
+5. Promesa al lector del `Brief` satisfecha (juicio, no programa).
+
+### De advertencia (penalizan, no bloquean)
+
+1. Desviación de beats respecto a la plantilla por encima de la tolerancia.
+2. Desvío de presupuesto de palabras superior al margen.
+3. Hilo inactivo más de N escenas.
+4. Repetición de n-gramas por encima del umbral.
+5. Motivo por debajo o por encima de su frecuencia objetivo.
+6. Métricas de estilo fuera de los márgenes del `ContratoDeEstilo`.
+7. Valencia de relación cambiada sin evento que lo justifique.
+8. Curva de tensión plana en tres o más escenas consecutivas.
+
+Una nota de diseño: la regla 4 de las bloqueantes (fuga epistémica) requiere que el planificador declare qué hechos usa cada evento. Es un coste real de anotación, y es lo que separa un sistema que valida coherencia de uno que solo espera que salga bien.
+
+## Vocabularios controlados
+
+Cerrar estos conjuntos es lo que permite consultar y validar; si son texto libre, ninguna regla es ejecutable.
+
+| Enumeración | Valores |
+| --- | --- |
+| `estatus_epistémico` | ignora · sospecha · cree\_falsamente · sabe · sabe\_y\_oculta |
+| `tipo_de_evento` | acción · decisión · revelación · encuentro · pérdida · cambio\_de\_estado |
+| `visibilidad_de_evento` | público · privado · secreto |
+| `rol_en_evento` | agente · paciente · testigo · mencionado |
+| `focalización` | interna · externa · omnisciente · variable |
+| `distancia_narrativa` | panorámica · escénica · íntima · corriente\_de\_conciencia |
+| `función_en_trama` | detonante · complicación · giro · revelación · crisis · clímax · secuela · resolución |
+| `tipo_de_escena` | acción · secuela · diálogo · transición · interludio |
+| `tipo_de_hilo` | principal · secundario · romántico · misterio · temático · de\_personaje |
+| `tipo_de_arco` | positivo · negativo · plano · corruptor · redentor |
+| `tipo_de_siembra` | objeto · habilidad · información · amenaza · relación · pregunta |
+| `estado_de_siembra` | abierto · resuelto · subvertido · abandonado |
+| `estado_de_borrador` | propuesto · en\_revisión · aceptado · rechazado · obsoleto |
+| `severidad` | crítica · alta · media · baja · informativa |
+| `modo_de_verificación` | programa · juez\_llm · humano |
+| `dureza_de_restricción` | dura · blanda |
+| `nivel_de_contexto` | serie · volumen · parte · capítulo · escena · literal |
+| `dimensión_de_estado` | salud · ubicación · lealtad · emoción · recursos · reputación · conocimiento |
+
+Un consejo de gobierno del modelo: añadir un valor a estas enumeraciones debería requerir un `RegistroDeDecisión`. Las enumeraciones que crecen sin control dejan de ser vocabularios y vuelven a ser texto libre.
+
+## Notas de implementación
+
+**Property graph tipado, no OWL.** Lo que este dominio necesita es detección de contradicciones y consultas temporales, no subsunción ni razonamiento sobre clases. Un grafo de propiedades con esquema y reglas de validación rinde más y se depura mejor. Si hace falta formalismo, SHACL sobre RDF o consultas parametrizadas cubren los invariantes del apartado anterior.
+
+**Híbrido grafo + vectorial.** El grafo guarda hechos, eventos, estados y relaciones: es la fuente de verdad consultable. El índice vectorial guarda prosa y sirve para recuperar por similitud — encontrar cómo se describió antes un lugar, recuperar escenas de tono análogo, detectar que una imagen ya se usó. No se validan hechos contra el índice vectorial: la similitud semántica no distingue entre lo que ocurrió y lo que casi ocurrió.
+
+**Versionado.** El canon es inmutable y se versiona por revisiones; los borradores son mutables. Un `PaqueteDeContexto` referencia la revisión del canon con la que se construyó, lo que permite reproducir exactamente una generación pasada.
+
+**Extracción de hechos.** La canonización desde prosa aceptada es el punto más frágil de la tubería. Conviene que el redactor emita un bloque estructurado de hechos nuevos junto con la prosa, en lugar de extraerlos después con otro modelo. Declarar es más fiable que inferir.
+
+**Coste.** Los filtros de `AlcanceDeRelevancia` no son solo corrección: son control de gasto. El paquete de contexto de una escena debería ser de tamaño aproximadamente constante a lo largo del libro. Si crece con el número de capítulos, la pirámide de resúmenes no está funcionando.
+
+## Núcleo mínimo viable
+
+Se puede arrancar con 12 clases y añadir el resto solo cuando un fallo concreto lo justifique.
+
+| # | Clase | Por qué está en el núcleo |
+| --- | --- | --- |
+| 1 | `Brief` | Sin contrato no hay nada que medir |
+| 2 | `Personaje` | Con deseo, necesidad y creencia falsa |
+| 3 | `Lugar` | Con atmósfera sensorial |
+| 4 | `EventoNarrativo` | El pivote; sin él no hay causalidad |
+| 5 | `Hecho` (temporal) | Elimina la mayoría de las contradicciones |
+| 6 | `Escena` | La unidad de trabajo |
+| 7 | `Capítulo` | Contenedor y presupuesto |
+| 8 | `Hilo` | Evita subtramas abandonadas |
+| 9 | `ParSiembraPago` | Evita cabos sueltos |
+| 10 | `PerfilDeEstilo` | Evita deriva de voz |
+| 11 | `Borrador` | Producción y estado |
+| 12 | `Defecto` | Hace visible el fallo |
+
+### Orden de adopción
+
+1. **Fase 1** — las 12 clases, con las comprobaciones de contradicción de hechos y siembras abiertas. Ya se detecta el 60% de los fallos típicos.
+2. **Fase 2** — `EstadoDeConocimiento` y `Narración`. Habilita las validaciones epistémicas y de POV, las más valiosas y las que nadie implementa.
+3. **Fase 3** — pirámide de resúmenes y `PaqueteDeContexto` con procedencia. Hace el sistema escalable y depurable.
+4. **Fase 4** — `Rúbrica`, `Juicio` y `Puerta`. Convierte la calidad en algo medible y el proceso en algo controlable.
+5. **Fase 5** — `Motivo`, `Tema`, `PlantillaEstructural`, `RegistroDeDecisión`. Sube el techo de calidad literaria.
+
+Una advertencia: el error más común al construir esto es empezar por la Fase 5 porque es la más interesante de modelar. Sin las Fases 1 y 2 el sistema produce texto temáticamente rico y factualmente incoherente, que es peor que lo contrario.
