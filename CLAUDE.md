@@ -97,6 +97,12 @@ Reglas que se derivan de esto:
 - `PaqueteDeContexto` almacena el recuento real de tokens por componente. Es la métrica
   que dice si la compresión se está degradando a lo largo del libro.
 
+Y una lectura del límite que no es evidente: **los 100.000 no son por petición, sino
+tokens en vuelo simultáneos en todo el sistema** (`docs/architecture.md` §4.1, decisión
+D-13). Lo hace cumplir un semáforo de crédito en el Orquestador, que reserva antes de
+invocar y libera en toda ruta de salida. La consecuencia para quien escribe código: el
+grado de paralelismo no es un parámetro libre, sale del crédito disponible.
+
 ### 2.3 FastAPI y React
 
 **Backend.** La generación de un capítulo tarda minutos, no milisegundos. Nada de
@@ -240,7 +246,7 @@ prompts. Úsalos literalmente, sin sinónimos:
 | `Borrador` | `Draft`, `Version`, `Text` |
 
 Si necesitas un concepto que no está en la ontología, ese es el problema a resolver
-primero: propón la clase en `docs/ontologia-definiciones.md` y déjalo registrado como
+primero: propón la clase en `docs/definitions.md` y déjalo registrado como
 `RegistroDeDecision`. No lo introduzcas de tapadillo como un campo suelto.
 
 ### 5.2 Enumeraciones
@@ -303,8 +309,8 @@ Un invariante sin test no existe.
 
 Un cambio en `backend/domain/` es un cambio en la ontología. Debe ir acompañado de:
 
-- Actualización de `docs/ontologia-definiciones.md`.
-- Actualización del diagrama correspondiente en `docs/ontologia-diagramas.md`.
+- Actualización de `docs/definitions.md`.
+- Actualización del diagrama correspondiente en `docs/domain-knowledge.md`.
 - Un `RegistroDeDecision` con la alternativa descartada y el motivo.
 - Una migración, si el canon almacenado se ve afectado.
 

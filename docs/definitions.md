@@ -270,6 +270,7 @@ Función especializada con responsabilidad, permisos de escritura y herramientas
 | Crítico / Juez | Juicio | Puntuación contra rúbrica |
 | Investigador | Lore, Hecho | Verosimilitud factual |
 | Entrenador de voz | PerfilDeEstilo | Idiolecto y consistencia de voz |
+| Canonizador | Hecho, EstadoDePersonaje, EstadoDeConocimiento | Promueve al canon los hechos de un borrador aceptado; único rol con escritura en el canon |
 
 El principio de diseño más importante aquí: **el Guardián de Continuidad no escribe prosa y el Redactor no escribe canon**. Separar quien genera de quien valida evita que el mismo agente racionalice sus propias incoherencias.
 
@@ -307,7 +308,7 @@ El estado `rechazada` con justificación es necesario: sin él, el sistema entra
 
 Condición que debe cumplirse para avanzar de fase. Atributos: `fase`, `comprobaciones[]`, `política` (bloqueante / advertencia), `resultado`, `excepciones_autorizadas[]`.
 
-Las puertas típicas: outline aprobado antes de redactar, continuidad limpia antes de cerrar capítulo, siembras resueltas antes de cerrar el volumen.
+Qué puertas existen, cuándo se evalúan y con qué política —bloqueante o advertencia— está en `architecture.md` §7.3. Aquí solo está la clase; los invariantes que cada puerta cobra están en el apartado «Invariantes y reglas de validación».
 
 ### RegistroDeDecisión
 
@@ -411,11 +412,7 @@ Filtro que decide qué entra en un paquete. Tres dimensiones combinadas:
 
 ### Políticas
 
-**Canonización.** Cuando un borrador pasa a `aceptado`, sus `hechos_nuevos_detectados` se extraen, se normalizan, se comprueban contra el canon y se promueven. Los que contradicen el canon generan un `Defecto` en lugar de sobrescribir.
-
-**Invalidación en cascada.** Si se reescribe una escena, se marcan obsoletos: sus resúmenes, los resúmenes de todo contenedor que la incluye, los hechos que establecía, y los paquetes de contexto que la citaban.
-
-Sin dependencias explícitas, el sistema acumula lo que en la práctica es canon fantasma: hechos que ya nadie narra pero que siguen condicionando las escenas siguientes. Es el fallo más insidioso de todos porque el sistema sigue pareciendo coherente consigo mismo mientras se separa del texto real.
+La mecánica de la **canonización** y de la **invalidación en cascada** es arquitectura, no dominio, y está en `architecture.md` §8, §4.3 y §7.3. Lo que este documento fija es la regla que ninguna implementación puede saltarse: un hecho que contradice el canon genera un `Defecto` y nunca lo sobrescribe.
 
 ## Capa de calidad
 
@@ -431,7 +428,7 @@ Cada dimensión de calidad se clasifica por **cómo se verifica**, porque eso de
 
 ### Dimensiones verificables por programa
 
-Son las que pueden bloquear una puerta, porque su resultado es determinista.
+Su resultado es determinista. El reparto de autoridad —cuál de las tres vías puede bloquear una puerta y cuál solo penaliza— está en `architecture.md` §7.1, y el reparto dimensión a dimensión en `verification.md` §4.
 
 | Comprobación | Regla |
 | --- | --- |
@@ -562,41 +559,8 @@ Un consejo de gobierno del modelo: añadir un valor a estas enumeraciones deber�
 
 ## Notas de implementación
 
-**Property graph tipado, no OWL.** Lo que este dominio necesita es detección de contradicciones y consultas temporales, no subsunción ni razonamiento sobre clases. Un grafo de propiedades con esquema y reglas de validación rinde más y se depura mejor. Si hace falta formalismo, SHACL sobre RDF o consultas parametrizadas cubren los invariantes del apartado anterior.
-
-**Híbrido grafo + vectorial.** El grafo guarda hechos, eventos, estados y relaciones: es la fuente de verdad consultable. El índice vectorial guarda prosa y sirve para recuperar por similitud — encontrar cómo se describió antes un lugar, recuperar escenas de tono análogo, detectar que una imagen ya se usó. No se validan hechos contra el índice vectorial: la similitud semántica no distingue entre lo que ocurrió y lo que casi ocurrió.
-
-**Versionado.** El canon es inmutable y se versiona por revisiones; los borradores son mutables. Un `PaqueteDeContexto` referencia la revisión del canon con la que se construyó, lo que permite reproducir exactamente una generación pasada.
-
-**Extracción de hechos.** La canonización desde prosa aceptada es el punto más frágil de la tubería. Conviene que el redactor emita un bloque estructurado de hechos nuevos junto con la prosa, en lugar de extraerlos después con otro modelo. Declarar es más fiable que inferir.
-
-**Coste.** Los filtros de `AlcanceDeRelevancia` no son solo corrección: son control de gasto. El paquete de contexto de una escena debería ser de tamaño aproximadamente constante a lo largo del libro. Si crece con el número de capítulos, la pirámide de resúmenes no está funcionando.
+Están en `architecture.md`, que es donde vive todo lo que cambiaría al cambiar de stack: el grafo sobre SQLite y el porqué de un property graph tipado en §3.1, el reparto entre grafo y vectorial en §3.1, la extracción de hechos en §8, el versionado y la reproducibilidad en §9, y el control de coste de los filtros de `AlcanceDeRelevancia` en §4.1.
 
 ## Núcleo mínimo viable
 
-Se puede arrancar con 12 clases y añadir el resto solo cuando un fallo concreto lo justifique.
-
-| # | Clase | Por qué está en el núcleo |
-| --- | --- | --- |
-| 1 | `Brief` | Sin contrato no hay nada que medir |
-| 2 | `Personaje` | Con deseo, necesidad y creencia falsa |
-| 3 | `Lugar` | Con atmósfera sensorial |
-| 4 | `EventoNarrativo` | El pivote; sin él no hay causalidad |
-| 5 | `Hecho` (temporal) | Elimina la mayoría de las contradicciones |
-| 6 | `Escena` | La unidad de trabajo |
-| 7 | `Capítulo` | Contenedor y presupuesto |
-| 8 | `Hilo` | Evita subtramas abandonadas |
-| 9 | `ParSiembraPago` | Evita cabos sueltos |
-| 10 | `PerfilDeEstilo` | Evita deriva de voz |
-| 11 | `Borrador` | Producción y estado |
-| 12 | `Defecto` | Hace visible el fallo |
-
-### Orden de adopción
-
-1. **Fase 1** — las 12 clases, con las comprobaciones de contradicción de hechos y siembras abiertas. Ya se detecta el 60% de los fallos típicos.
-2. **Fase 2** — `EstadoDeConocimiento` y `Narración`. Habilita las validaciones epistémicas y de POV, las más valiosas y las que nadie implementa.
-3. **Fase 3** — pirámide de resúmenes y `PaqueteDeContexto` con procedencia. Hace el sistema escalable y depurable.
-4. **Fase 4** — `Rúbrica`, `Juicio` y `Puerta`. Convierte la calidad en algo medible y el proceso en algo controlable.
-5. **Fase 5** — `Motivo`, `Tema`, `PlantillaEstructural`, `RegistroDeDecisión`. Sube el techo de calidad literaria.
-
-Una advertencia: el error más común al construir esto es empezar por la Fase 5 porque es la más interesante de modelar. Sin las Fases 1 y 2 el sistema produce texto temáticamente rico y factualmente incoherente, que es peor que lo contrario.
+Las 12 clases con las que se arranca, el motivo por el que cada una está en el núcleo y el orden de adopción de las cinco fases están en `architecture.md` §13. El diagrama entidad-relación de ese núcleo es el 8 de `domain-knowledge.md`.

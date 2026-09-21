@@ -5,7 +5,7 @@
 ## Qué contiene este documento
 
 El reparto concreto de la verificación. `definitions.md` enumera las dimensiones
-de calidad y los invariantes, y `architecture.md` §5 describe en abstracto quién
+de calidad y los invariantes, y `architecture.md` §7 describe en abstracto quién
 tiene autoridad para bloquear; aquí se dice, para cada dimensión, **con qué
 método se comprueba, quién la comprueba, qué recibe exactamente y con qué
 severidad sale el `Defecto`**. La segunda mitad trata los otros dos niveles: cómo
@@ -85,7 +85,7 @@ comprobación declarado en `AGENTS.md` §4.6 precisamente por esto.
 
 La severidad de las tablas es la de partida, en los valores de `severidad` de
 `definitions.md` — crítica · alta · media · baja · informativa. El enrutado
-posterior (reescritura, replanificación, escalado) es el de `architecture.md` §5.4.
+posterior (reescritura, replanificación, escalado) es el de `architecture.md` §6.3.
 
 ### Alcance local — frase y párrafo
 
@@ -172,7 +172,7 @@ una escena suelta.
 ## 6. Dónde se cobra cada dimensión: las puertas
 
 Una dimensión sin puerta no bloquea nada, por determinista que sea su
-verificador. `architecture.md` §5.2 fija cinco puertas y su política; esta tabla
+verificador. `architecture.md` §7.3 fija cinco puertas y su política; esta tabla
 dice qué dimensiones de §4 se cobran en cada una.
 
 | Puerta | Cuándo | Qué se cobra | Política |
@@ -196,7 +196,7 @@ afirmar que el bucle converge en lugar de suponerlo.
 | --- | --- | --- | --- |
 | Que los verificadores detectan | T | Casos sembrados: un borrador con un defecto conocido de una sola dimensión por caso | Tasa de detección por dimensión |
 | Que no inventan defectos | T | Los mismos casos, con esa dimensión intacta | Falsos positivos por capítulo |
-| Que el bucle converge | A | Recuento de intentos hasta `aceptado`, contra los cuatro de `architecture.md` §5.4 | Escenas que giran sin cerrar |
+| Que el bucle converge | A | Recuento de intentos hasta `aceptado`, contra los cuatro de `architecture.md` §6.3 | Escenas que giran sin cerrar |
 | Que no se repite el mismo fallo | A | Tipo de defecto en intentos consecutivos: dos iguales obligan a replanificar | Reescrituras que no arreglan nada |
 | Que los defectos son utilizables | A | Proporción descartada por falta de `evidencia` | Agentes que opinan en vez de comprobar |
 | Que los artefactos están bien formados | A | Recuento de rechazos por campo ausente, por rol | Un rol con demasiado alcance o con pocos ejemplos |
@@ -223,7 +223,7 @@ nadie puede verificar.
 
 Lo que sostiene al nivel de obra. Aquí sí aplican las metodologías clásicas de
 ingeniería de software, porque aquí sí hay especificación: los límites de módulos
-de `architecture.md` §2 y los invariantes de `definitions.md`.
+de `architecture.md` §2.3 y los invariantes de `definitions.md`.
 
 La columna *Clase* usa el marco T/A/I/D/U; la columna *Origen* cita el apartado
 de `architecture.md` que impone el requisito, para que un cambio en un documento
@@ -233,13 +233,13 @@ se note en el otro.
 
 | Elemento | Metodología | Clase | Origen | Autoridad |
 | --- | --- | --- | --- | --- |
-| `domain/` no importa de ningún otro paquete (ni `store/`, ni `agents/`, ni FastAPI, ni Pydantic) | Análisis estático del grafo de importaciones | A | §2 | Bloqueante |
-| `quality/` importa de `domain/` y nunca de `agents/` | Análisis estático del grafo de importaciones | A | §2 | Bloqueante |
-| `agents/` no importa de `agents/`: la coordinación vive en `orchestrator/` | Análisis estático del grafo de importaciones | A | §2 | Bloqueante |
-| Solo `store/` habla con SQLite y con el índice vectorial | Análisis estático: `sqlite3` y el cliente vectorial no se alcanzan desde ningún otro paquete | A | §2, §3.2 | Bloqueante |
-| `api/` no invoca modelos: encola `Tarea` y lee estado | Análisis estático: el cliente de modelo no se alcanza desde `api/` | A | §2, §6 | Bloqueante |
-| `frontend/` no contiene reglas de dominio ni invariantes duplicados | Inspección en revisión de código | I | §2, §6 | Bloqueante |
-| Tipos de las clases de la ontología | Comprobación de tipos | A | §2 | Bloqueante |
+| `domain/` no importa de ningún otro paquete (ni `store/`, ni `agents/`, ni FastAPI, ni Pydantic) | Análisis estático del grafo de importaciones | A | §2.3 | Bloqueante |
+| `quality/` importa de `domain/` y nunca de `agents/` | Análisis estático del grafo de importaciones | A | §2.3 | Bloqueante |
+| `agents/` no importa de `agents/`: la coordinación vive en `orchestrator/` | Análisis estático del grafo de importaciones | A | §2.3 | Bloqueante |
+| Solo `store/` habla con SQLite y con el índice vectorial | Análisis estático: `sqlite3` y el cliente vectorial no se alcanzan desde ningún otro paquete | A | §2.3, §3.1 | Bloqueante |
+| `api/` no invoca modelos: encola `Tarea` y lee estado | Análisis estático: el cliente de modelo no se alcanza desde `api/` | A | §2.3, §2.2 | Bloqueante |
+| `frontend/` no contiene reglas de dominio ni invariantes duplicados | Inspección en revisión de código | I | §2.3, §2.2 | Bloqueante |
+| Tipos de las clases de la ontología | Comprobación de tipos | A | §2.3 | Bloqueante |
 
 ### Almacenamiento
 
@@ -249,9 +249,9 @@ se note en el otro.
 | Escritor único: ninguna escritura sobre el canon se emite fuera del orquestador | Análisis del grafo de llamadas + pruebas de integración con tareas concurrentes | A / T | §3.1, §9 | Bloqueante |
 | Índices sobre `(sujeto_id, predicado)`, `posicion_en_historia` y `(conocedor_id, hecho_id)` | Pruebas de integración: plan de consulta de las validaciones más frecuentes | T | §3.1 | Advertencia |
 | El canon versionado se reconstruye desde eventos de cambio, sin copia entera por revisión | Pruebas basadas en propiedades: reconstruir la revisión *N* y compararla con el estado en *N* | T | §3.1 | Bloqueante |
-| Migraciones de SQLite hacia delante | Pruebas de integración contra un canon real | T | §2, §3.1 | Bloqueante |
-| Ningún hecho se valida contra el índice vectorial | Análisis estático: `quality/` no alcanza el índice vectorial por ninguna ruta | A | §3.2 | Bloqueante |
-| La canonización nunca sobrescribe canon: lo que lo contradice produce un `Defecto` | Pruebas basadas en propiedades sobre `hechos_nuevos_detectados` contradictorios | T | §3.3 | Bloqueante |
+| Migraciones de SQLite hacia delante | Pruebas de integración contra un canon real | T | §2.3, §3.1 | Bloqueante |
+| Ningún hecho se valida contra el índice vectorial | Análisis estático: `quality/` no alcanza el índice vectorial por ninguna ruta | A | §3.1 | Bloqueante |
+| La canonización nunca sobrescribe canon: lo que lo contradice produce un `Defecto` | Pruebas basadas en propiedades sobre `hechos_nuevos_detectados` contradictorios | T | §8 | Bloqueante |
 
 ### Tubería de contexto
 
@@ -260,23 +260,23 @@ se note en el otro.
 | El `PaqueteDeContexto` cabe en 20.000–25.000 tokens, muy por debajo del techo de 100.000 | Pruebas basadas en propiedades sobre escenas generadas | T | §4.1 | Bloqueante |
 | El ensamblador cuenta tokens antes de llamar y rechaza el paquete que excede; nunca trunca por la cola | Pruebas unitarias con paquetes por encima del presupuesto | T | §4.1 | Bloqueante |
 | El paquete de la escena 3 y el de la escena 40 son equivalentes en tamaño | Pruebas basadas en propiedades sobre longitud de libro | T | §4.1 | Bloqueante |
-| `PaqueteDeContexto` almacena el recuento real por componente | Pruebas unitarias sobre el ensamblado | T | §4.1 | Bloqueante |
-| El filtro temporal actúa antes del epistémico | Prueba unitaria con un hecho vigente que el POV ignora: entra por el temporal, sale por el epistémico | T | §4.2 | Bloqueante |
-| Cascada completa: resúmenes de la escena, de todo contenedor, hechos establecidos y paquetes que la citaban | Pruebas basadas en propiedades sobre cascadas de invalidación | T | §4.3 | Bloqueante |
-| Cierre de `deriva_de`: ninguna `UnidadDeContexto` viva deriva de una fuente obsoleta | Pruebas basadas en propiedades sobre cascadas de invalidación | T | §4.3, §9 | Bloqueante |
+| `PaqueteDeContexto` almacena el recuento real por componente | Pruebas unitarias sobre el ensamblado | T | §4.4 | Bloqueante |
+| El filtro temporal actúa antes del epistémico | Prueba unitaria con un hecho vigente que el POV ignora: entra por el temporal, sale por el epistémico | T | §4.4 | Bloqueante |
+| Cascada completa: resúmenes de la escena, de todo contenedor, hechos establecidos y paquetes que la citaban | Pruebas basadas en propiedades sobre cascadas de invalidación | T | §4.6 | Bloqueante |
+| Cierre de `deriva_de`: ninguna `UnidadDeContexto` viva deriva de una fuente obsoleta | Pruebas basadas en propiedades sobre cascadas de invalidación | T | §4.6, §9 | Bloqueante |
 
 ### Proceso y fronteras
 
 | Elemento | Metodología | Clase | Origen | Autoridad |
 | --- | --- | --- | --- | --- |
-| Separación de escritura por rol: el Canonizador es el único que escribe canon | Guardarraíles en `orchestrator/`, contrastados con la matriz de `AGENTS.md` §2 | A / T | §1, §2 | Bloqueante |
-| Ciclo de vida de la escena: un solo `Borrador` aceptado, todo camino termina | Comprobación de modelos sobre la máquina de estados de §5.3 | A | §5.3 | Bloqueante |
-| Escalado de reintentos: cuatro intentos, y salto a replanificación si dos consecutivos dan el mismo tipo de defecto | Pruebas unitarias sobre el contador del orquestador | T | §5.4, §9 | Bloqueante |
-| Frontera API ↔ React (esquemas Pydantic, eventos SSE, `202 Accepted` con id de `Tarea`) | Pruebas de contrato | T | §6 | Bloqueante |
-| Un prompt editado sin incrementar su versión semántica | Integración continua: el hash del prompt cambia y la versión no | A | §7 | Bloqueante |
-| Cambio de stack o valor nuevo en una enumeración cerrada sin `RegistroDeDecision` | Integración continua: comprobación del registro en el propio cambio | A | §1, §9 | Bloqueante |
-| Paso de las puertas en cada cambio del repositorio | Integración continua: la misma tubería que el código humano | T | §5.2 | Bloqueante |
-| ¿La suite de invariantes detecta algo? | Pruebas de mutación periódicas sobre `backend/quality/` | T | §5.2 | Advertencia |
+| Separación de escritura por rol: el Canonizador es el único que escribe canon | Guardarraíles en `orchestrator/`, contrastados con la matriz de `AGENTS.md` §2 | A / T | §1, §2.3 | Bloqueante |
+| Ciclo de vida de la escena: un solo `Borrador` aceptado, todo camino termina | Comprobación de modelos sobre la máquina de estados de §5.3 | A | §6.2 | Bloqueante |
+| Escalado de reintentos: cuatro intentos, y salto a replanificación si dos consecutivos dan el mismo tipo de defecto | Pruebas unitarias sobre el contador del orquestador | T | §6.3, §9 | Bloqueante |
+| Frontera API ↔ React (esquemas Pydantic, eventos SSE, `202 Accepted` con id de `Tarea`) | Pruebas de contrato | T | §2.2 | Bloqueante |
+| Un prompt editado sin incrementar su versión semántica | Integración continua: el hash del prompt cambia y la versión no | A | §9 | Bloqueante |
+| Cambio de stack o valor nuevo en una enumeración cerrada sin `RegistroDeDecision` | Integración continua: comprobación del registro en el propio cambio | A | §2.1, §9 | Bloqueante |
+| Paso de las puertas en cada cambio del repositorio | Integración continua: la misma tubería que el código humano | T | §7.3 | Bloqueante |
+| ¿La suite de invariantes detecta algo? | Pruebas de mutación periódicas sobre `backend/quality/` | T | §7.3 | Advertencia |
 
 La última fila es la que sostiene a las demás. «Un invariante sin test no existe»
 garantiza que el test está escrito, no que discrimine: sin mutación, una suite
@@ -298,7 +298,7 @@ Su superficie de daño es la escritura en el canon, y eso lo acota el escritor
 
 **Revisión humana.** A diferencia de un sistema sin puertas, aquí sí está dentro
 del ciclo, pero acotada a dos puntos: el muestreo y los escalados del intento 4
-(`architecture.md` §5.4), y la puerta *Volumen cerrado*. El editor no ejecuta
+(`architecture.md` §6.3), y la puerta *Volumen cerrado*. El editor no ejecuta
 pasos intermedios.
 
 ## 10. Huecos declarados
@@ -313,7 +313,7 @@ verificación sin huecos declarados suele significar que no se ha mirado.
 - **Las pruebas de mutación de §8 no están en la tubería.** Mientras no lo estén,
   la cobertura de invariantes es una afirmación no verificada.
 - **La comprobación de modelos del ciclo de vida** se apoya en que el diagrama de
-  `architecture.md` §5.3 y el código del orquestador no diverjan. Nada lo
+  `architecture.md` §6.2 y el código del orquestador no diverjan. Nada lo
   comprueba hoy.
 - **Las puertas *Outline aprobado* y *Acto cerrado*** de §6 no tienen invariantes
   enumerados en `definitions.md` al modo de las otras tres. Hasta que los tengan,
@@ -321,6 +321,6 @@ verificación sin huecos declarados suele significar que no se ha mirado.
 - **El *replay* de §7 supone** que el índice vectorial devuelve los mismos vecinos
   para la misma consulta tras una reindexación. No está comprobado; si no se
   cumple, el *replay* reproduce la llamada pero no el paquete.
-- **Las tres decisiones transversales** de `architecture.md` §1 no viven en
+- **Las tres decisiones transversales** de `architecture.md` §2.1 no viven en
   ninguna enumeración, así que la comprobación de `RegistroDeDecision` no detecta
   que cambien.

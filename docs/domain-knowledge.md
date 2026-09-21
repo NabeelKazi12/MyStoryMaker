@@ -12,7 +12,7 @@ Ocho diagramas Mermaid del mismo modelo, de lo general a lo ejecutable; las defi
 | 2. Plano diegético | `classDiagram` | ¿Cómo se estructura el canon? |
 | 3. Plano discursivo | `classDiagram` | ¿Cómo se organiza el relato? |
 | 4. Puente entre planos | `flowchart` | ¿Cómo se conectan historia y relato? |
-| 5. Ciclo de vida de escena | `stateDiagram-v2` | ¿Cómo avanza el trabajo? |
+| 5. Ciclo de vida de escena | — | ¿Cómo avanza el trabajo? → `architecture.md` §6.2 |
 | 6. Ensamblado de contexto | `flowchart` | ¿Qué ve el agente en cada llamada? |
 | 7. Bucle de calidad | `flowchart` | ¿Cómo se valida y cuándo se para? |
 | 8. Núcleo mínimo | `erDiagram` | ¿Qué implemento primero? |
@@ -314,43 +314,9 @@ El ciclo completo es: el evento establece el hecho, la escena renderiza el event
 
 ## 5. Ciclo de vida de una escena
 
-De esqueleto a canon, con los puntos donde el proceso puede pararse.
+La máquina de estados del borrador y la política de reintentos son proceso, no dominio: están en `architecture.md` §6.2 y §6.3. Se deja aquí el hueco numerado para no renumerar los diagramas que vienen después.
 
-```mermaid
-stateDiagram-v2
-    [*] --> Planificada: Arquitecto crea esqueleto
-    Planificada --> ContextoListo: ensamblar paquete
-    ContextoListo --> Redactada: Redactor escribe
-    Redactada --> EnValidacion: Guardián revisa
-
-    EnValidacion --> Defectuosa: defecto bloqueante
-    EnValidacion --> EnCritica: continuidad limpia
-
-    Defectuosa --> Redactada: reescritura dirigida
-    Defectuosa --> Replanificada: el fallo es del plan
-    Replanificada --> ContextoListo
-
-    EnCritica --> EnRevision: críticas abiertas
-    EnCritica --> Aceptada: supera umbrales
-
-    EnRevision --> EnCritica: revisión aplicada
-    EnRevision --> Escalada: máximo de reintentos
-    Escalada --> Aceptada: humano aprueba
-    Escalada --> Replanificada: humano rechaza
-
-    Aceptada --> Canonizada: hechos promovidos
-    Canonizada --> [*]
-
-    Canonizada --> Obsoleta: se reescribe una escena anterior
-    Obsoleta --> ContextoListo: invalidación en cascada
-```
-
-Dos transiciones que suelen olvidarse y son las que evitan bucles infinitos:
-
-- **`Defectuosa → Replanificada`**: a veces el problema no es la prosa sino el plan. Sin esta salida, el sistema reescribe la misma escena imposible indefinidamente.
-- **`EnRevision → Escalada`**: el contador de reintentos convierte un bucle potencialmente infinito en una decisión humana acotada.
-
-Y la transición `Canonizada → Obsoleta` es la que hace del sistema algo revisable: una escena ya canonizada puede volver a la cola si algo anterior cambia.
+Lo que sí es dominio, y por eso se queda dicho aquí, son las dos salidas que evitan bucles infinitos: cuando el fallo es del plan y no de la prosa, la escena se replanifica en lugar de reescribirse; y cuando una escena ya canonizada depende de otra que se reescribe, vuelve a la cola en lugar de quedarse quieta contradiciendo al texto.
 
 ## 6. Ensamblado del contexto
 
@@ -456,13 +422,7 @@ flowchart TD
 
 ### Reparto de autoridad
 
-| Vía | Puede bloquear | Cuándo corre |
-| --- | --- | --- |
-| Programática | Sí | En cada borrador |
-| Juez LLM | Solo penaliza | En cada borrador |
-| Humano | Sí, con excepción autorizada | Por muestreo y en puertas de cierre |
-
-El reparto es deliberado. Un juez LLM con autoridad de bloqueo produce bucles caros e inestables, porque su puntuación varía entre llamadas sobre el mismo texto. Un verificador programático es determinista y por eso puede parar la línea.
+Quién puede bloquear una puerta y quién solo penaliza está en `architecture.md` §7.1, y el reparto dimensión a dimensión en `verification.md` §4. Lo que importa para leer el diagrama: las tres vías no tienen la misma autoridad, y la diferencia no es de rigor sino de determinismo.
 
 ## 8. Núcleo mínimo viable
 
@@ -584,4 +544,4 @@ erDiagram
 
 Dos observaciones sobre este esquema. `HECHO.valido_desde` y `valido_hasta` apuntan a `EVENTO`, no a fechas: es lo que hace posible la validación de intervalos. Y `BORRADOR` es la única tabla con texto largo — todo lo demás es estructura consultable.
 
-Falta deliberadamente `ESTADO_CONOCIMIENTO`, que entra en la Fase 2. Cuando se añada, su esquema es `(conocedor_id, hecho_id, estatus, adquirido_en_id, fuente)` con clave compuesta, y habilita la validación de fugas epistémicas descrita en el documento de definiciones.
+Falta deliberadamente `ESTADO_CONOCIMIENTO`, que entra en la fase 2 del orden de adopción de `architecture.md` §13. Cuando se añada, su esquema es `(conocedor_id, hecho_id, estatus, adquirido_en_id, fuente)` con clave compuesta, y habilita la validación de fugas epistémicas descrita en el documento de definiciones.

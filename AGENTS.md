@@ -3,8 +3,10 @@
 Contrato de los agentes que producen la novela: qué hace cada rol, qué puede escribir,
 qué contexto recibe y cuándo termina.
 
-Para instrucciones de desarrollo del repositorio, ver `CLAUDE.md`.
-Para las definiciones de las clases citadas aquí, ver `docs/ontologia-definiciones.md`.
+El apartado 10 es el contrato de quien cambia este repositorio: el orden
+`docs/` → `specs/` → plan → código y las puertas que lo separan.
+Para las convenciones de código, el stack y los comandos, ver `CLAUDE.md`.
+Para las definiciones de las clases citadas aquí, ver `docs/definitions.md`.
 
 ---
 
@@ -298,8 +300,8 @@ cuenta convierte errores detectables en deriva silenciosa.
 | Acto cerrado | Fin de acto | Curvas de tensión, hilos activos, beats de plantilla | Advertencia |
 | Volumen cerrado | Final | Siembras resueltas, hilos resueltos, promesa al lector | Bloqueante |
 
-Los invariantes concretos de cada puerta están en el apartado 11 del documento de
-definiciones y viven como tests en `backend/quality/`.
+Los invariantes concretos de cada puerta están en el apartado «Invariantes y reglas de
+validación» del documento de definiciones y viven como tests en `backend/quality/`.
 
 ---
 
@@ -431,3 +433,151 @@ alternativa descartada y su motivo.
 
 En obras largas la deriva rara vez viene de mala prosa. Viene de decisiones olvidadas y
 luego contradichas sin que nadie se dé cuenta.
+
+---
+
+## 10. Proceso de cambio en el repositorio
+
+Los apartados 1–9 son el contrato de los agentes que **escriben la novela**. Este es el
+contrato de quien **cambia el repositorio** —persona o agente de código—: en qué orden se
+producen los artefactos y qué puerta hay que pasar antes de escribir el siguiente. Las
+convenciones de código, el stack y los comandos están en `CLAUDE.md`.
+
+```
+docs/  ──►  specs/  ──►  plan de implementación  ──►  código
+            aprobada        aprobado                  TDD
+                                                       │
+                                └──────────────────────┘
+                                  cierre: spec y docs al día
+```
+
+La cadena es de una sola dirección y no admite atajos. Cada flecha es una puerta
+bloqueante: sin spec aprobada no hay plan, y sin plan aprobado no hay código. Saltarse un
+paso no ahorra trabajo, lo mueve al final, cuando ya está escrito en código y cuesta diez
+veces más discutirlo.
+
+**Quien aprueba es siempre una persona.** Un agente redacta la spec y el plan, pero no
+aprueba los suyos ni los de otro agente. Es el mismo principio del apartado 1: quien
+genera no valida.
+
+### 10.1 Actualizar `docs/`
+
+`docs/` es la referencia compartida: `definitions.md` (ontología y vocabularios
+cerrados), `domain-knowledge.md`, `architecture.md` y `verification.md`. Describe el
+sistema tal como está acordado, no tal como se imaginó.
+
+- **Edita donde encaja.** Respeta la estructura y la numeración del documento; no
+  reescribas apartados que el encargo no toca. Un documento que se reordena en cada
+  cambio deja de poder citarse.
+- **Actualiza las referencias cruzadas.** Si renombras o mueves algo, arregla los
+  enlaces en el mismo cambio.
+- Añadir una clase o un valor de enumeración exige además un `RegistroDeDecision` con la
+  alternativa descartada y el motivo (`CLAUDE.md` §5.1 y §5.2).
+- **Un cambio en `docs/` que implique comportamiento nuevo no va solo: necesita spec.**
+  Sin spec únicamente se documenta lo ya decidido —corregir un error, aclarar una
+  redacción, registrar algo que el código ya hace—. La frontera es simple: si al leer el
+  diff alguien podría implementar algo distinto de lo que hay hoy, es una spec.
+
+### 10.2 Crear o actualizar `specs/`
+
+Una spec por cambio, en `specs/<id>-<slug>.md`, con `<id>` correlativo de tres dígitos.
+Dice qué se cambia y por qué; no cómo.
+
+**Primero se pregunta.** Antes de escribir la spec hay que resolver la ambigüedad con
+quien pide el cambio, no rellenarla con suposiciones razonables. Como mínimo se pregunta
+por:
+
+- El **alcance**: qué entra y, sobre todo, qué queda fuera de este cambio.
+- El **comportamiento esperado**, en términos observables desde fuera del módulo.
+- Los **casos límite** y qué debe ocurrir en cada uno.
+- Cómo se **verifica** cada requisito, y quién tiene autoridad para bloquear.
+- Qué **documentos** de `docs/` quedan afectados.
+
+Las preguntas que no se han podido resolver van a un apartado **Preguntas abiertas** y
+bloquean la aprobación. Una suposición escrita como si fuera un hecho acordado es el modo
+de fallo caro de este paso: nadie la revisa porque no parece una pregunta.
+
+Contenido mínimo de la spec:
+
+| Apartado | Qué contiene |
+| --- | --- |
+| Problema | Qué no funciona hoy o qué falta, sin proponer solución |
+| Alcance | Qué entra y qué queda explícitamente fuera |
+| Requisitos | Uno por fila, comprobable por separado |
+| Verificación | Por requisito: metodología concreta y `modo_de_verificación` |
+| Impacto | Documentos, módulos y migraciones afectados |
+| Criterios de aceptación | Cuándo se puede dar por cerrado el cambio |
+| Preguntas abiertas | Lo que sigue sin decidir; vacío para poder aprobar |
+
+Un requisito que no se puede fallar por separado tampoco se puede verificar por separado:
+pártelo. Si un requisito no admite predicado, decláralo así y decide qué se hace con él
+—reformularlo o aceptarlo como riesgo—; el método está en la skill
+`metodologias-de-verificacion` y su aplicación al proyecto en `docs/verification.md`.
+
+Estado de la spec: `borrador` → `aprobada`. La aprobación es explícita y va fechada en el
+propio documento.
+
+### 10.3 Plan de implementación
+
+**Requiere la spec en estado `aprobada`.** El plan vive en el apartado final de la misma
+spec, añadido después de aprobarla: así el qué y el cómo se leen juntos y no hay dos
+documentos que puedan divergir.
+
+El plan traduce requisitos en pasos:
+
+- **Pasos ordenados**, cada uno lo bastante pequeño para revisarse de una sentada.
+- Por paso, **los módulos que toca** y la comprobación de que no rompe las reglas de
+  dependencia de `CLAUDE.md` §4.
+- Por paso, **el test que lo demuestra**, nombrado antes de escribirlo.
+- **Migraciones** necesarias, si el canon almacenado se ve afectado.
+- **Riesgos y marcha atrás**: qué se hace si el paso no sale.
+
+Si al planificar aparece algo que la spec no contempla, no se resuelve en el plan: se
+vuelve a la spec. Un plan que decide alcance es una spec encubierta que nadie aprobó.
+
+Estado del plan: `borrador` → `aprobado`, también explícito.
+
+### 10.4 Crear o modificar código
+
+**Requiere el plan en estado `aprobado`.** No se escribe código —ni "un prototipo rápido
+para ver si va"— antes de esa aprobación. Un prototipo que funciona se queda.
+
+El ciclo por paso del plan es TDD, el mismo del apartado 7.1 de `CLAUDE.md`:
+
+1. **Rojo.** Escribe el test que expresa el requisito y compruébalo fallando. Un test que
+   nunca se ha visto fallar no demuestra nada: puede estar comprobando otra cosa.
+2. **Verde.** Implementa lo mínimo que lo hace pasar.
+3. **Refactor.** Limpia con la suite en verde.
+
+Reglas del paso:
+
+- Los tests se escriben **antes**, no después "para cubrir". La cobertura añadida a
+  posteriori documenta el código que hay; no comprueba el requisito que se pidió.
+- Antes de cerrar, `uv run pytest` y `uv run pytest -m invariants` en verde, más lint y
+  tipos (`CLAUDE.md` §6).
+- Un invariante sin test no existe.
+
+**El cambio no está terminado cuando el código pasa.** El cierre incluye:
+
+- **Actualizar la spec** con lo que realmente se construyó, anotando cada desviación y su
+  motivo. La spec deja de ser una intención y pasa a describir el sistema.
+- **Actualizar `docs/`** según el impacto declarado: `definitions.md` si cambió la
+  ontología, `architecture.md` si cambiaron los límites de módulos, `verification.md` si
+  cambió quién comprueba qué.
+- **Registrar un `RegistroDeDecision`** si por el camino se decidió algo no trivial.
+
+Documentación que va por detrás del código deja de leerse, y a partir de ahí el proyecto
+ya no tiene referencia compartida: tiene dos, y una miente.
+
+### 10.5 Puertas del proceso
+
+| Puerta | Cuándo | Comprueba | Política |
+| --- | --- | --- | --- |
+| Spec aprobada | Antes del plan | Sin preguntas abiertas; cada requisito con verificación asignada | Bloqueante |
+| Plan aprobado | Antes del código | Pasos con test nombrado; límites de módulo respetados | Bloqueante |
+| Test en rojo | Antes de implementar cada paso | Existe un test que falla por el motivo correcto | Bloqueante |
+| Suite verde | Antes de cerrar | `pytest`, invariantes, lint y tipos | Bloqueante |
+| Spec y docs al día | Cierre del cambio | Desviaciones anotadas; documentos del impacto actualizados | Bloqueante |
+
+Si una puerta no se puede pasar, el cambio no avanza: se vuelve al artefacto anterior. Es
+el mismo escalado del apartado 6, con una persona al final de la cadena.
