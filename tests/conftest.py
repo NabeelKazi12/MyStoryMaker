@@ -49,8 +49,12 @@ def conn(base_plantilla: Path, tmp_path: Path) -> Iterator[sqlite3.Connection]:
         conexion.close()
 
 
-def material_minimo(conn: sqlite3.Connection) -> None:
-    """Un volumen, un capitulo, un personaje, un lugar y una escena validos."""
+def material_minimo(conn: sqlite3.Connection, *, con_escena: bool = True) -> None:
+    """Un volumen, un capitulo, un personaje, un lugar y, si se pide, una escena.
+
+    Los tests de la API dan de alta su propia escena por el endpoint, que es justo lo
+    que quieren comprobar: si la fixture la insertara tambien, chocarian entre si.
+    """
     conn.execute("INSERT OR IGNORE INTO volumen (id, titulo) VALUES ('vol-1', 'Uno')")
     conn.execute(
         "INSERT OR IGNORE INTO capitulo (id, volumen_id, orden) VALUES ('cap-1', 'vol-1', 1)"
@@ -62,6 +66,13 @@ def material_minimo(conn: sqlite3.Connection) -> None:
     conn.execute(
         "INSERT OR IGNORE INTO lugar (id, nombre_canonico) VALUES ('lug-1', 'El puerto')"
     )
+    # El evento al que apunta `renderiza`: sin el, la arista escena_evento no existe.
+    conn.execute(
+        "INSERT OR IGNORE INTO evento (id, descripcion, posicion_en_historia, tipo) "
+        "VALUES ('ev-1', 'Irene entra en el puerto', 10, 'accion')"
+    )
+    if not con_escena:
+        return
     conn.execute(
         "INSERT OR IGNORE INTO escena (id, capitulo_id, orden, pov_id, lugar_id, "
         "momento_en_historia, objetivo, conflicto, resultado, valor_entrada, valor_salida, "

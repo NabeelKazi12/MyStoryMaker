@@ -739,7 +739,8 @@ Las cuatro preguntas restantes de `architecture.md` §12 siguen sin afectar a v1
 
 | | |
 | --- | --- |
-| **Estado** | `aprobado` el 2026-09-22 por @Nabeel. La puerta *Plan aprobado* de `AGENTS.md` §10.5 queda superada: los 102 requisitos tienen paso y cada paso, test nombrado |
+| **Estado** | `aprobado` el 2026-09-22 por @Nabeel y **ejecutado**: fases A a E construidas. La puerta *Plan aprobado* de `AGENTS.md` §10.5 queda superada |
+| **Desviaciones** | Tres, anotadas aquí segun `AGENTS.md` §10.4. **(1)** El cliente de modelo real no está cableado: `construir_cliente_real` lanza `NotImplementedError` citando la salvedad de R-1, porque este entorno no tiene credenciales para confirmar el modelo contra la Models API. El bucle de 3.2 corre con un cliente falso que simula el contrato, no la calidad de la prosa. **(2)** El recuento de tokens de `backend/context/presupuesto.py` es una heurística, no `count_tokens` del proveedor: un recuento optimista convertiría el techo duro del semáforo en uno imaginario, y hay que cambiarlo antes de invocar de verdad. **(3)** El SSE de RF-API-04 emite el historial ya registrado, no un flujo en vivo: seguir la tabla mientras la tarea avanza exige decidir el mecanismo de espera, que no estaba en el alcance |
 | **Fecha** | 2026-09-22 |
 | **Spec de la que cuelga** | SPEC-001, `aprobada` el 2026-09-22 |
 

@@ -16,6 +16,11 @@ from contextlib import contextmanager
 from pathlib import Path
 
 # Una novela por proceso, una sola persona autora (supuesto S-1).
+# El resto del sistema habla de «una conexion que me da el store», no de sqlite3. Asi
+# la regla 4 de architecture.md 2.3 se sostiene tambien en las anotaciones de tipo, y
+# cambiar de motor no obliga a tocar api/ ni orchestrator/.
+Conexion = sqlite3.Connection
+
 VARIABLE_DE_ENTORNO = "MYSTORYMAKER_DB"
 RUTA_POR_DEFECTO = Path("mystorymaker.db")
 

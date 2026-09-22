@@ -10,10 +10,10 @@ name = "mystorymaker"
 version = "0.1.0"
 description = "Sistema multiagente que escribe novelas manteniendo coherencia verificable"
 requires-python = ">=3.12"
-dependencies = ["alembic>=1.14"]
+dependencies = ["alembic>=1.14", "fastapi>=0.115", "uvicorn>=0.32"]
 
 [dependency-groups]
-dev = ["pytest>=8.3", "ruff>=0.7", "mypy>=1.13"]
+dev = ["pytest>=8.3", "ruff>=0.7", "mypy>=1.13", "httpx>=0.27"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
