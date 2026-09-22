@@ -183,3 +183,91 @@ class CanonVersionado:
             else:
                 vigentes.discard(fila["fila_id"])
         return frozenset(vigentes)
+
+
+@dataclass(frozen=True)
+class BorradoresAceptadosDuplicados:
+    """Escenas con mas de un borrador aceptado, tal como las ve el store."""
+
+    escena_id: str
+    cuantos: int
+
+
+@dataclass(frozen=True)
+class SiembraAbierta:
+    """Una siembra sin pagar, con la distancia que lleva y el limite que declaro."""
+
+    id: str
+    distancia: int
+    distancia_maxima: int | None
+
+
+@dataclass(frozen=True)
+class DesvioDePresupuesto:
+    """Un capitulo con su presupuesto declarado y su recuento real."""
+
+    capitulo_id: str
+    presupuesto: int
+    real: int
+
+
+@dataclass(frozen=True)
+class ConsultasDeCalidad:
+    """Lo que `quality/` necesita de la base, expresado como datos y no como SQL.
+
+    Existe por la regla 4 de `architecture.md` 2.3: solo `store/` habla con SQLite. Los
+    verificadores reciben filas ya tipadas, asi que se pueden probar sin base de datos y
+    la frontera se mantiene sin depender de la disciplina de quien escribe el siguiente.
+    """
+
+    conn: sqlite3.Connection
+
+    def borradores_aceptados_duplicados(self) -> tuple[BorradoresAceptadosDuplicados, ...]:
+        filas = self.conn.execute(
+            "SELECT escena_id, COUNT(*) AS n FROM borrador WHERE estado = 'aceptado' "
+            "GROUP BY escena_id HAVING n > 1 ORDER BY escena_id"
+        ).fetchall()
+        return tuple(
+            BorradoresAceptadosDuplicados(escena_id=f["escena_id"], cuantos=f["n"])
+            for f in filas
+        )
+
+    def siembras_abiertas(self) -> tuple[SiembraAbierta, ...]:
+        filas = self.conn.execute(
+            """
+            SELECT sp.id, sp.distancia_maxima, siembra.orden AS orden_siembra,
+                   (SELECT MAX(orden) FROM escena) AS orden_actual
+            FROM siembra_pago sp
+            JOIN escena siembra ON siembra.id = sp.escena_siembra
+            WHERE sp.estado = 'abierto'
+            ORDER BY sp.id
+            """
+        ).fetchall()
+        return tuple(
+            SiembraAbierta(
+                id=f["id"],
+                distancia=(f["orden_actual"] or 0) - f["orden_siembra"],
+                distancia_maxima=f["distancia_maxima"],
+            )
+            for f in filas
+        )
+
+    def desvios_de_presupuesto(self) -> tuple[DesvioDePresupuesto, ...]:
+        filas = self.conn.execute(
+            """
+            SELECT c.id, c.presupuesto_palabras,
+                   COALESCE(SUM(b.recuento_palabras), 0) AS real
+            FROM capitulo c
+            LEFT JOIN escena e ON e.capitulo_id = c.id
+            LEFT JOIN borrador b ON b.escena_id = e.id AND b.estado = 'aceptado'
+            WHERE c.presupuesto_palabras IS NOT NULL
+            GROUP BY c.id
+            ORDER BY c.id
+            """
+        ).fetchall()
+        return tuple(
+            DesvioDePresupuesto(
+                capitulo_id=f["id"], presupuesto=f["presupuesto_palabras"], real=f["real"]
+            )
+            for f in filas
+        )
