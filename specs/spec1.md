@@ -5,8 +5,8 @@
 | **Identificador** | SPEC-001 |
 | **Título** | Primera versión del backend: núcleo de dominio, canon verificable y bucle de una escena |
 | **Estado** | `borrador` — **no aprobada**. Bloqueada por el apartado 12 |
-| **Fecha** | 2026-09-21 |
-| **Documentos de referencia** | `docs/definitions.md`, `docs/domain-knowledge.md`, `docs/architecture.md`, `docs/verification.md`, `AGENTS.md`, `CLAUDE.md` |
+| **Fecha** | 2026-09-22 |
+| **Documentos de referencia** | `docs/definitions.md`, `docs/domain-knowledge.md`, `docs/architecture.md`, `docs/verification.md`, `AGENTS.md`, `CLAUDE.md`, en su estado del 2026-09-22 |
 | **Fase de adopción** | Fase 1 de `architecture.md` §13, más el DAG mínimo y el semáforo de crédito |
 
 > Este documento es la spec única de `AGENTS.md` §10.2 redactada en forma de SRS: reúne
@@ -63,11 +63,12 @@ diferible: el DAG mínimo y el semáforo de crédito, aunque sea con concurrenci
 | A1 | `backend/domain/` | Las 12 clases del núcleo mínimo de `architecture.md` §13 más `Volumen`, sin dependencias de infraestructura |
 | A2 | `backend/store/` | SQLite con WAL, esquema inicial, índices obligatorios, repositorios y canon versionado por eventos de cambio |
 | A3 | `backend/migrations/` | Migración inicial hacia delante |
-| A4 | `backend/quality/` | Verificadores deterministas de la fase 1 y las puertas *Escena limpia*, *Capítulo cerrado* y *Volumen cerrado* |
+| A4 | `backend/quality/` | Verificadores deterministas de la fase 1 y las puertas *Outline aprobado*, *Escena limpia*, *Capítulo cerrado* y *Volumen cerrado* |
 | A5 | `backend/context/` | Ensamblado del `PaqueteDeContexto` con recuento de tokens por componente, el orden de componentes del contrato de rol, orden de recorte y `hash` |
 | A6 | `backend/orchestrator/` | `Plan` como DAG persistido, bucle de reconciliación, máquina de estados de `Tarea`, escalera de reintentos, semáforo de crédito, matriz de permisos y canonización |
 | A7 | `backend/worker/` | Consumidor de la cola con un único rol que invoca modelo: el **Redactor** |
 | A8 | `backend/api/` | FastAPI: alta de canon y esqueletos de escena, encolado con `202 Accepted`, SSE de progreso y lectura de borradores, defectos y puertas |
+| A9 | Corpus de casos sembrados | Un par de casos por verificador de 4.4: un borrador con el defecto conocido de esa sola dimensión y el mismo borrador con la dimensión intacta. Es el material sobre el que corre 8.4 |
 
 ### 2.3 Fuera de alcance — qué no entra
 
@@ -82,7 +83,7 @@ Cada exclusión lleva su motivo. Una exclusión sin motivo se convierte en un ol
 | `Rubrica`, `Juicio`, `UmbralDeAceptacion` y el rol **Juez** | Fase 4. Nada de lo que producen bloquea, así que su ausencia no debilita ninguna puerta |
 | `Motivo`, `Tema`, `PlantillaEstructural` | Fase 5 |
 | Roles **Arquitecto**, **Worldbuilder**, **Investigador**, **Entrenador de voz**, **Editor de línea**, **Editor de desarrollo** | v1 implementa un solo rol con invocación de modelo para acotar el trabajo de prompts. Los esqueletos de escena, entidades y perfiles de estilo entran por API con los mismos campos obligatorios que `AGENTS.md` §4.2 exige al Arquitecto |
-| Puertas *Outline aprobado* y *Acto cerrado* | `verification.md` §10 declara que no tienen invariantes enumerados en `definitions.md`. Implementarlas hoy sería codificar una intención |
+| Puerta *Acto cerrado* | `verification.md` §10 declara que no tiene invariantes enumerados en `definitions.md`. Implementarla hoy sería codificar una intención. *Outline aprobado* sí entra: `verification.md` §4 le asigna dimensiones y v1 puede cobrar tres de ellas (RF-QUA-18) |
 | `frontend/` | Esta spec es del backend. La frontera queda fijada en 7 para que el frontend pueda especificarse aparte |
 | Política de retención y borrado | Pregunta abierta 7 de `architecture.md` §12. En v1 nada se borra, y eso queda como riesgo declarado en 11 |
 
@@ -171,13 +172,28 @@ sensibles en v1:
 - **S-5** (un solo proceso de backend, sin réplicas) sostiene que un contador en memoria
   acote algo. Si cae, el semáforo tiene que ser distribuido.
 
-Supuesto propio de esta spec, hoy recogido también en `architecture.md` §11:
+Supuestos propios de esta spec. El primero ya está recogido en `architecture.md`
+§11; los dos siguientes los abre esta revisión y todavía no están en ningún
+documento de `docs/`:
 
 - **S-9.** Una `Escena` de v1 se puede redactar sin filtro epistémico porque su ausencia
   produce falsos negativos —defectos que no se detectan—, no falsos positivos. Si
   resultara falso, es decir, si redactar sin filtro epistémico produjera prosa
   sistemáticamente inservible, la fase 2 dejaría de ser diferible y esta spec habría
   cortado por donde no debía.
+- **S-10.** La declaración que emite el Redactor —`hechos_nuevos_detectados`,
+  `eventos_narrados`, `siembras_tocadas`— es lo bastante completa para que las
+  dimensiones **(E)** de `verification.md` §2 signifiquen algo. Es el supuesto más
+  cargado de esta spec: v1 tiene un solo rol con invocación de modelo, así que toda
+  su capa bloqueante descansa sobre una declaración suya, y el conjunto congelado que
+  permitiría medir su *recall* no existe (`verification.md` §10). Si es falso, la
+  capa bloqueante de v1 pasa en verde sin haber evaluado nada. RF-QUA-19 y RF-QUA-20
+  no lo desmienten: solo hacen visible el caso extremo.
+- **S-11.** La obra de v1 tiene una sola línea temporal, sin `ramas[]`. RF-QUA-02 y
+  RF-QUA-03 se implementan sin ese atributo, así que una rama temporal, una realidad
+  alternativa o un viaje en el tiempo producirían un defecto crítico falso. Si es
+  falso, hace falta el mecanismo de excepción declarada de `verification.md` §4, que
+  esa misma sección declara no expresable en la fase 1.
 
 ---
 
@@ -212,6 +228,7 @@ documento que lo impone, para que un cambio en `docs/` se note aquí.
 | RF-STO-07 | Existe un catálogo declarado de predicados de `Hecho` con su exclusividad —`funcional`, a lo sumo un valor vigente por sujeto, o `multivalor`—. Un predicado no catalogado se rechaza al canonizar | Esta spec, 9.2 |
 | RF-STO-08 | Las consultas transitivas sobre el grafo causal de `EventoNarrativo` se resuelven con CTEs recursivas dentro de `store/`, no reconstruyendo el grafo en memoria | `architecture.md` §3.1 |
 | RF-STO-09 | Ninguna tabla del canon admite prosa. El único texto largo del esquema es `BORRADOR.texto` | `CLAUDE.md` §3.1 |
+| RF-STO-10 | La migración inicial siembra el catálogo `PREDICADO` con el conjunto de partida de 9.2. El catálogo nunca queda vacío al arrancar: con él vacío, RF-STO-07 rechaza toda canonización y el bucle de 3.2 no puede cerrarse | Esta spec, 9.2 |
 
 ### 4.3 Contexto — `backend/context/`
 
@@ -232,6 +249,12 @@ Los verificadores de v1 y, explícitamente, los que no están. Cinco de los ocho
 bloqueantes de `definitions.md` quedan cubiertos; los otros tres se declaran ausentes en
 RF-QUA-14, para que nadie los dé por cubiertos.
 
+Tres de los que sí entran son dimensiones **(E)** de `verification.md` §2: su predicado es
+determinista, pero su entrada la declara el Redactor leyendo su propia prosa. RF-QUA-01
+depende de `hechos_nuevos_detectados`, RF-QUA-04 de los eventos renderizados y RF-QUA-08
+del reconocimiento de nombres propios. RF-QUA-19 y RF-QUA-20 existen por eso, y el
+supuesto que lo sostiene es S-10.
+
 | ID | Requisito | Severidad | Origen |
 | --- | --- | --- | --- |
 | RF-QUA-01 | Detecta contradicción de hechos: dos hechos con el mismo sujeto y un predicado `funcional` con intervalos de vigencia solapados | crítica | `definitions.md` bloqueante 3 |
@@ -245,10 +268,15 @@ RF-QUA-14, para que nadie los dé por cubiertos.
 | RF-QUA-09 | Detecta repetición de trigramas y tetragramas del borrador contra los capítulos anteriores por encima del umbral | media | `definitions.md` §Dimensiones verificables |
 | RF-QUA-10 | Todo `Defecto` emitido lleva `tipo`, `span`, `regla_violada`, `severidad` y `evidencia` citable. Un defecto sin evidencia se descarta antes de llegar al Orquestador, y el descarte queda contado | — | `verification.md` §3 |
 | RF-QUA-11 | La puerta *Escena limpia* es bloqueante y cobra RF-QUA-01 a RF-QUA-05 | — | `verification.md` §6 |
-| RF-QUA-12 | La puerta *Capítulo cerrado* es bloqueante y cobra continuidad acumulada, RF-QUA-09 y RF-QUA-07 | — | `verification.md` §6 |
-| RF-QUA-13 | La puerta *Volumen cerrado* es bloqueante y cobra RF-QUA-06 y todo hilo con resolución o abandono declarado | — | `verification.md` §6 |
-| RF-QUA-14 | Las puertas declaran como **evidencia ausente**, nunca como aprobado, los invariantes bloqueantes que v1 no implementa: fuga epistémica, disciplina de POV y violación de `ReglaDelMundo` | — | `architecture.md` §6.5 |
+| RF-QUA-12 | La puerta *Capítulo cerrado* es bloqueante y cobra, sobre el capítulo ya cerrado, la reejecución de las dimensiones de escena de 4.4, más RF-QUA-09 y RF-QUA-07 | — | `verification.md` §6 |
+| RF-QUA-13 | La puerta *Volumen cerrado* es bloqueante y cobra RF-QUA-06, todo hilo con resolución o abandono declarado y, para los de `tipo` principal, que su `pregunta_dramatica` tenga escena de resolución declarada y no abandono | — | `verification.md` §6; `definitions.md` cierre 2 y 3 |
+| RF-QUA-14 | Las puertas declaran como **evidencia ausente**, nunca como aprobado, los invariantes bloqueantes que v1 no implementa: fuga epistémica, disciplina de POV y violación de `ReglaDelMundo`. La proporción de puertas cerradas con evidencia ausente queda contada y es consultable | — | `architecture.md` §6.5; `verification.md` §12 V-04 |
 | RF-QUA-15 | Ningún verificador de `quality/` consulta el índice vectorial por ninguna ruta | — | `architecture.md` §3.1 |
+| RF-QUA-16 | Detecta `Hilo` sin `pregunta_dramatica` declarada | crítica | `verification.md` §4 alcance de contrato |
+| RF-QUA-17 | Detecta `Personaje` de `relevancia` protagónica sin `Hilo` asociado, o con `necesidad_interna` vacía | crítica | `definitions.md` §Personaje; `verification.md` §4 |
+| RF-QUA-18 | La puerta *Outline aprobado* es bloqueante y cobra RF-QUA-07, RF-QUA-16 y RF-QUA-17. Declara evidencia ausente para conformidad estructural y para restricciones y políticas de contenido, que quedan fuera del alcance de v1 | — | `verification.md` §6 |
+| RF-QUA-19 | El `Defecto` de una dimensión **(E)** cita en su `evidencia` el bloque declarado contra el que se evaluó, no solo el span del texto | alta | `verification.md` §2 y §11 F-01 |
+| RF-QUA-20 | Un `Borrador` cuyo bloque `hechos_nuevos_detectados` llega vacío no supera *Escena limpia* en silencio: la puerta registra RF-QUA-01 como evidencia ausente en lugar de como superada | — | `verification.md` §11 F-01; `architecture.md` §1 principio 8 |
 
 ### 4.5 Orquestación — `backend/orchestrator/`
 
@@ -340,7 +368,7 @@ se fija qué existe y qué no.
 | `VOLUMEN` | `titulo`, `presupuesto_palabras`, `perfil_estilo_id` |
 | `CAPITULO` | `volumen_id`, `orden`, `presupuesto_palabras` |
 | `ESCENA` | `capitulo_id`, `orden`, `pov_id`, `lugar_id`, `momento_en_historia`, `objetivo`, `conflicto`, `resultado`, `valor_entrada`, `valor_salida`, `funcion_en_trama`, `tipo`, `presupuesto_palabras` |
-| `PERSONAJE` | `nombre_canonico`, `alias`, `deseo_externo`, `necesidad_interna`, `creencia_falsa`, `arco_tipo`, `perfil_estilo_id` |
+| `PERSONAJE` | `nombre_canonico`, `alias`, `relevancia`, `deseo_externo`, `necesidad_interna`, `creencia_falsa`, `arco_tipo`, `perfil_estilo_id`. `relevancia` es el atributo de `Entidad` que RF-QUA-17 necesita |
 | `LUGAR` | `nombre_canonico`, `alias`, `atmosfera_sensorial` |
 | `EVENTO` | `descripcion`, `posicion_en_historia`, `tipo`, `visibilidad`, `lugar_id` |
 | `HECHO` | `sujeto_id`, `predicado`, `objeto`, `valido_desde` → `EVENTO`, `valido_hasta` → `EVENTO` (nulo = vigente), `certeza`, `establecido_en` → `ESCENA` |
@@ -437,6 +465,7 @@ bloquea**.
 | RF-STO-07 | Prueba unitaria: un predicado no catalogado se rechaza al canonizar | T | `programa` | Bloqueante |
 | RF-STO-08 | Prueba de integración sobre un grafo causal profundo, comparada con el resultado esperado | T | `programa` | Bloqueante |
 | RF-STO-09 | Inspección del esquema en revisión de código, más análisis estático de las columnas de texto | I / A | `humano` | Bloqueante |
+| RF-STO-10 | Prueba de integración: base vacía → migración → el catálogo trae el conjunto de partida, y una canonización de prueba no se rechaza por predicado no catalogado | T | `programa` | Bloqueante |
 
 ### 8.3 Contexto
 
@@ -460,6 +489,10 @@ bloquea**.
 | RF-QUA-11 a RF-QUA-13 | Pruebas de integración por puerta: un artefacto que la pasa y uno que la falla por cada comprobación que cobra | T | `programa` | Bloqueante |
 | RF-QUA-14 | Prueba de integración: el resultado de la puerta enumera los invariantes no implementados como evidencia ausente, y ninguno aparece como superado | T | `programa` | Bloqueante |
 | RF-QUA-15 | Análisis estático: el índice vectorial no se alcanza desde `quality/` por ninguna ruta | A | `programa` | Bloqueante |
+| RF-QUA-16, RF-QUA-17 | Dos casos sembrados por verificador sobre el corpus de A9, igual que RF-QUA-01 a RF-QUA-09 | T | `programa` | Bloqueante |
+| RF-QUA-18 | Pruebas de integración sobre la puerta: un outline que la pasa y uno que la falla por cada comprobación que cobra, más la comprobación de que lo no implementado sale como evidencia ausente | T | `programa` | Bloqueante |
+| RF-QUA-19 | Prueba unitaria: un defecto de RF-QUA-01 sin referencia al bloque declarado se descarta como defecto sin evidencia | T | `programa` | Bloqueante |
+| RF-QUA-20 | Prueba de integración con un borrador de bloque vacío: la puerta no lo declara limpio y la escena no se canoniza | T | `programa` | Bloqueante |
 | Discriminación de la suite | Pruebas de mutación sobre `backend/quality/`: una suite que pasa siempre es indistinguible de una que no comprueba nada | T | `programa` | Advertencia |
 
 ### 8.5 Orquestación y canonización
@@ -471,8 +504,8 @@ bloquea**.
 | RF-ORQ-03, RF-ORQ-15 | Análisis del grafo de llamadas: ninguna escritura de estado ni de canon se emite fuera del orquestador, contrastado con la matriz de `AGENTS.md` §2 | A | `programa` | Bloqueante |
 | RF-ORQ-05, RF-ORQ-06 | Pruebas unitarias sobre el contador: cuatro intentos, y salto a replanificación con dos defectos consecutivos del mismo tipo | T | `programa` | Bloqueante |
 | RF-ORQ-07 | Prueba unitaria por clase de fallo: solo contrato y contenido incrementan el contador narrativo | T | `programa` | Bloqueante |
-| RF-ORQ-08 | Pruebas basadas en propiedades sobre secuencias de éxito, fallo, timeout y cancelación: el crédito vuelve siempre a su valor inicial | T | `programa` | Bloqueante |
-| RF-ORQ-09 | Prueba de integración: la desviación entre reserva y uso real queda registrada por clase de tarea | T | `programa` | Bloqueante |
+| RF-ORQ-08 | Pruebas basadas en propiedades sobre secuencias de éxito, fallo, timeout y cancelación: el crédito vuelve siempre a su valor inicial. Es V-10 de `verification.md` §12 | T | `programa` | Bloqueante |
+| RF-ORQ-09 | Prueba de integración: la desviación entre reserva y uso real queda registrada por clase de tarea, conciliada al terminar cada `Plan` (V-10) | T | `programa` | Bloqueante |
 | RF-ORQ-10 | Prueba unitaria con una reserva mayor que el crédito total | T | `programa` | Bloqueante |
 | RF-ORQ-11 | Prueba unitaria de la cola: P0 antes que P1, y una tarea envejecida sube de clase | T | `programa` | Bloqueante |
 | RF-ORQ-12 | Prueba unitaria por nivel de timeout: se cancela, se libera la reserva y se clasifica como contrato | T | `programa` | Bloqueante |
@@ -482,7 +515,7 @@ bloquea**.
 | RF-ORQ-19 | Prueba de contrato sobre el flujo SSE | T | `programa` | Bloqueante |
 | RF-ORQ-20 | Inspección en revisión de código: no existe ninguna ruta que cambie de modelo o recorte el paquete sin dejarlo en `Procedencia` | I | `humano` | Bloqueante |
 | RF-CAN-01 a RF-CAN-05 | Pruebas basadas en propiedades sobre `hechos_nuevos_detectados`: compatibles, duplicados exactos, sucesiones legítimas y contradictorios. Ningún caso sobrescribe canon | T | `programa` | Bloqueante |
-| RF-CAN-06 | Pruebas basadas en propiedades sobre cascadas de invalidación, dentro de la transacción de cierre | T | `programa` | Bloqueante |
+| RF-CAN-06 | Pruebas basadas en propiedades sobre cascadas de invalidación, dentro de la transacción de cierre, más la auditoría de `deriva_de` que pide V-09 de `verification.md` §12 | T | `programa` | Bloqueante |
 
 ### 8.6 Worker y API
 
@@ -519,6 +552,15 @@ de `verification.md` §10:
 
 - **Fuga epistémica, disciplina de POV y violación de `ReglaDelMundo`.** Sin verificador
   en v1. RF-QUA-14 obliga a que las puertas los muestren como evidencia ausente.
+- **La fiabilidad de la extracción del Redactor no se mide.** V-01 de `verification.md`
+  §12 exige un *recall* de `hechos_nuevos_detectados` contra un inventario anotado a
+  mano, y ese conjunto congelado no existe. RF-QUA-19 y RF-QUA-20 hacen depurable y
+  visible el fallo, pero no lo cuantifican: el supuesto S-10 se queda sin medir en toda
+  la v1. Es el hueco más serio de esta lista, porque afecta a tres de los cinco
+  invariantes bloqueantes que v1 sí implementa.
+- **Los nueve validadores restantes de `verification.md` §12** dependen de corpus que no
+  existen o de fases posteriores. v1 solo cubre V-04 (RF-QUA-14), V-09 (RF-CAN-06) y
+  V-10 (RF-ORQ-08 y RF-ORQ-09).
 - **Deriva de compresión** (`verification.md` §7). Sin pirámide de resúmenes no es
   medible. RF-CTX-02 deja registrado el recuento por componente para poder medirla en
   cuanto exista la fase 3.
@@ -536,8 +578,8 @@ de `verification.md` §10:
 | Documento | Impacto |
 | --- | --- |
 | `definitions.md` | **Cambia.** Añade la clase `Predicado` —catálogo de RF-STO-07— y el vocabulario cerrado `exclusividad_de_predicado` con los valores `funcional` y `multivalor`. Exige `RegistroDeDecision`, según `AGENTS.md` §10.1 |
-| `domain-knowledge.md` | **Cambia.** El diagrama 8, núcleo mínimo viable, incorpora `PREDICADO` y su arista con `HECHO` |
-| `architecture.md` | **Cambia al cerrar.** Las cifras de §4.2 se corrigen con lo que registre `Procedencia`, según el TODO que ese apartado ya declara. El supuesto S-9 de 3.5 ya está recogido en §11 |
+| `domain-knowledge.md` | **Cambia.** El diagrama 8 incorpora `PREDICADO` y su arista con `HECHO`. Con `Volumen` y `PREDICADO` deja de ser «las 12 clases del núcleo» y pasa a ser el esquema de v1: hay que decidir cuál de las dos cosas es y ajustar su encabezado |
+| `architecture.md` | **Cambia al cerrar.** Las cifras de §4.2 se corrigen con lo que registre `Procedencia`, según el TODO que ese apartado ya declara. El supuesto S-9 de 3.5 ya está recogido en §11; S-10 y S-11 tienen que añadirse ahí al cerrar |
 | `verification.md` | **Cambia al cerrar.** §10 pierde los huecos que v1 cierra y gana los que v1 abre, enumerados en 8.8 |
 | `AGENTS.md`, `CLAUDE.md` | Sin cambios. v1 implementa lo que ya dicen |
 
@@ -555,6 +597,11 @@ de `verification.md` §10:
   modelo*: mete una llamada no determinista dentro del verificador que debe poder parar la
   línea. *Lista de pares excluyentes en código*: crece sin gobierno y queda fuera del
   alcance de `RegistroDeDecision`, que es justamente lo que `CLAUDE.md` §5.2 evita.
+- **Cómo entran los predicados.** Solo por migración, nunca por API en tiempo de
+  ejecución: si añadir un predicado exige `RegistroDeDecision`, un endpoint de alta lo
+  convertiría en un dato más y el vocabulario dejaría de estar cerrado. La migración
+  inicial siembra el conjunto de partida (RF-STO-10) y cada predicado posterior es una
+  migración con su decisión registrada. Queda dentro de lo que pregunta P-7.
 - **Implicaciones.** Añadir un predicado es un cambio de vocabulario controlado y exige
   `RegistroDeDecision`. Es un coste de anotación real, del mismo tipo que
   `hechos_requeridos` en `AGENTS.md` §4.2, y por la misma razón.
@@ -574,21 +621,26 @@ El cambio se puede dar por cerrado cuando **todos** se cumplen:
 
 1. El bucle de 3.2 se ejecuta de principio a fin sobre un `Brief` de prueba y produce un
    `Borrador` aceptado y canonizado, con la revisión del canon incrementada.
-2. El mismo bucle, con un borrador que contradice el canon, termina en `Defecto` y en
-   reescritura dirigida, y tras cuatro intentos en `escalada`, sin haber sobrescrito canon
-   en ningún momento.
-3. Cada requisito de 4 tiene al menos un test asociado, y cada test de invariante se ha
-   visto fallar antes de existir su implementación (RNF-07).
-4. `uv run pytest`, `uv run pytest -m invariants`, `ruff` y `mypy backend/` en verde.
-5. El análisis estático de límites de módulos pasa: RNF-01 a RNF-03, RF-STO-04, RF-QUA-15,
+2. El mismo bucle, con un borrador que contradice el canon **repitiendo el tipo de
+   defecto**, termina en `Defecto`, reescritura dirigida y replanificación en el segundo
+   intento, tal como exige RF-ORQ-06, sin haber sobrescrito canon en ningún momento.
+3. El mismo bucle, con defectos **de tipos distintos** en intentos sucesivos, recorre la
+   escalera entera de RF-ORQ-05 y termina en `escalada` en el cuarto intento. Los dos
+   caminos se comprueban por separado porque RF-ORQ-06 impide que un solo caso los
+   recorra ambos.
+4. Cada requisito de 4 tiene al menos un test asociado, y cada test de invariante se ha
+   visto fallar antes de existir su implementación (RNF-07). Los de RF-QUA-01 a
+   RF-QUA-09, RF-QUA-16 y RF-QUA-17 corren sobre el corpus de casos sembrados de A9.
+5. `uv run pytest`, `uv run pytest -m invariants`, `ruff` y `mypy backend/` en verde.
+6. El análisis estático de límites de módulos pasa: RNF-01 a RNF-03, RF-STO-04, RF-QUA-15,
    RF-API-06 y RF-API-07.
-6. Una generación archivada se reproduce desde su `Procedencia`: misma revisión de canon y
+7. Una generación archivada se reproduce desde su `Procedencia`: misma revisión de canon y
    mismo hash de paquete (RF-CTX-06).
-7. Tras una ejecución completa, las cuatro señales de RNF-05 están registradas y son
+8. Tras una ejecución completa, las cuatro señales de RNF-05 están registradas y son
    consultables.
-8. El `RegistroDeDecision` del catálogo de predicados existe, y `definitions.md` y
+9. El `RegistroDeDecision` del catálogo de predicados existe, y `definitions.md` y
    `domain-knowledge.md` están actualizados según 9.1.
-9. Esta spec está actualizada con lo que realmente se construyó, con cada desviación
+10. Esta spec está actualizada con lo que realmente se construyó, con cada desviación
    anotada y su motivo (`AGENTS.md` §10.4).
 
 ---
@@ -603,6 +655,7 @@ El cambio se puede dar por cerrado cuando **todos** se cumplen:
 | Sin política de retención, el fichero de SQLite crece sin techo | Tamaño del fichero por capítulo | Declarado como deuda; bloqueado por la pregunta abierta 7 de `architecture.md` §12 |
 | Un solo rol con modelo deja el resto de contratos de `AGENTS.md` sin ejercitar | Contratos de rol que, al implementarse en fase 2, no encajan con el orquestador | El contrato común de `AGENTS.md` §3 se implementa completo aunque en v1 solo lo use el Redactor |
 | La suite de invariantes pasa sin discriminar | Mutaciones que sobreviven | Pruebas de mutación de 8.4, aunque su autoridad sea de advertencia |
+| El corpus de A9 no representa lo que falla de verdad, y los verificadores pasan sobre casos cómodos | Defectos reales que ningún caso sembrado se parecía a ellos | Sembrar los casos a partir de defectos observados en ejecución, no solo inventados al escribir el test |
 
 ---
 
