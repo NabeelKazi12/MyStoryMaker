@@ -7,12 +7,53 @@ todo lo que pase de ahi sin validar contamina el canon.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
 VERSION_DE_PROMPT = "1.0.0"
 PROMPTS = Path(__file__).parent / "prompts"
+
+
+# Hash del fichero de cada version publicada. Editar un prompt sin subir la version rompe
+# la reproducibilidad de todo lo generado antes, y se detecta porque el hash cambia y la
+# version no (RF-WRK-07). Al publicar una version nueva se anade su linea aqui.
+MANIFIESTO = {
+    "1.0.0": "b096e2e19ccbd60d811819307e677a8ca6089d4ea1ac85c70006d23d6675ea78",
+}
+
+
+class PromptAlterado(Exception):
+    """El fichero de prompt no coincide con el hash de su version declarada."""
+
+    def __init__(self, version: str, esperado: str, encontrado: str) -> None:
+        super().__init__(
+            f"Prompt del Redactor v{version}: el fichero ha cambiado sin que suba la "
+            f"version. Esperado {esperado[:12]}..., encontrado {encontrado[:12]}.... "
+            f"Incrementa la version en lugar de editar en sitio: si no, todo lo generado "
+            f"antes deja de ser reproducible y nada lo avisa."
+        )
+
+
+def hash_del_prompt(version: str = "") -> str:
+    """Hash del fichero de prompt de una version."""
+    objetivo = version or VERSION_DE_PROMPT
+    return hashlib.sha256((PROMPTS / f"v{objetivo}.md").read_bytes()).hexdigest()
+
+
+def verificar_integridad_del_prompt(version: str = "") -> None:
+    """Falla si el fichero cambio sin que subiera la version. Corre en integracion continua."""
+    objetivo = version or VERSION_DE_PROMPT
+    esperado = MANIFIESTO.get(objetivo)
+    if esperado is None:
+        # Se comprueba antes de leer el fichero: una version que nadie registro puede no
+        # existir siquiera, y el error util es «no esta en el manifiesto», no un
+        # FileNotFoundError que obliga a ir a mirar por que.
+        raise PromptAlterado(objetivo, "sin registrar en el manifiesto", "desconocido")
+    encontrado = hash_del_prompt(objetivo)
+    if encontrado != esperado:
+        raise PromptAlterado(objetivo, esperado, encontrado)
 
 
 def prompt_vigente() -> str:

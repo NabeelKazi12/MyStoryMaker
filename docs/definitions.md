@@ -126,6 +126,16 @@ Atributos: `sujeto` → Entidad, `predicado`, `objeto`, `válido_desde` → Even
 
 Invariante: dos hechos con el mismo sujeto y predicado mutuamente excluyente no pueden tener intervalos de validez solapados. Esta única regla elimina la mayor parte de las contradicciones de continuidad.
 
+### Predicado
+
+Entrada del catálogo de predicados admitidos para un `Hecho`, con su exclusividad declarada.
+
+Atributos: `nombre`, `exclusividad` (funcional / multivalor), `descripción`.
+
+Un predicado `funcional` admite a lo sumo un valor vigente por sujeto, y por tanto dos intervalos solapados son una contradicción; uno `multivalor` no. Sin esta distinción, el invariante de intervalos solapados no es ejecutable: nadie sabe qué predicados son mutuamente excluyentes. Un `Hecho` cuyo predicado no está en el catálogo se rechaza al canonizar.
+
+Invariante: todo `Hecho` usa un predicado presente en el catálogo. Añadir uno es un cambio de vocabulario controlado y exige un `RegistroDeDecisión`.
+
 ### EstadoDePersonaje
 
 Valor de un atributo variable de un personaje en un intervalo: salud, posición, lealtad, estado emocional, recursos, reputación.
@@ -548,6 +558,7 @@ Cerrar estos conjuntos es lo que permite consultar y validar; si son texto libre
 | `tipo_de_siembra` | objeto · habilidad · información · amenaza · relación · pregunta |
 | `estado_de_siembra` | abierto · resuelto · subvertido · abandonado |
 | `estado_de_borrador` | propuesto · en\_revisión · aceptado · rechazado · obsoleto |
+| `exclusividad_de_predicado` | funcional · multivalor |
 | `estado_de_tarea` | pendiente · lista · en\_curso · en\_verificación · aceptada · rechazada · escalada · fallida · bloqueada · cancelada |
 | `severidad` | crítica · alta · media · baja · informativa |
 | `modo_de_verificación` | programa · juez\_llm · humano |

@@ -31,6 +31,73 @@ PREDICADOS_DE_PARTIDA = (
     ("conoce_a", "multivalor", "Entidades con las que tiene trato"),
 )
 
+# Los RegistroDeDecision que SPEC-001 9.2 exige. Son inmutables y no se borran: en obras
+# largas la deriva rara vez viene de mala prosa, viene de decisiones olvidadas y luego
+# contradichas sin que nadie se de cuenta.
+DECISIONES_REGISTRADAS = (
+    (
+        "rd-predicados",
+        "Catalogo de predicados con exclusividad declarada",
+        "Inferir la exclusividad del texto del predicado con un modelo; lista de pares "
+        "excluyentes en codigo",
+        "Sin saber que predicados son mutuamente excluyentes, contradiccion de hechos no es "
+        "un predicado ejecutable",
+        "definitions.md, store",
+    ),
+    (
+        "rd-r1",
+        "El Redactor usa claude-opus-5 con pensamiento adaptativo y effort high",
+        "claude-sonnet-5 para ahorrar unos 9 dolares por novela",
+        "Una llamada cuesta unos 0,21 dolares y una novela unos 15: el coste no domina y la "
+        "prosa es el producto",
+        "worker, agents",
+    ),
+    (
+        "rd-r2",
+        "Los reintentos de transporte los hace el cliente del SDK con max_retries 3",
+        "Implementar la escalera de transporte en worker/",
+        "Dos capas multiplican: tres por tres son nueve llamadas pagadas por un corte de red",
+        "orchestrator, worker",
+    ),
+    (
+        "rd-r3",
+        "Historial tipificado de intentos en lugar de dos contadores",
+        "Dos contadores enteros, narrativos e infraestructura",
+        "D-06 clasifica en cuatro clases, no en dos: con dos contadores se pierde la senal",
+        "domain, store",
+    ),
+    (
+        "rd-r4",
+        "El borrador rechazado no entra en el intento siguiente",
+        "Incluirlo marcado como rechazado",
+        "Reinyectarlo invita a reproducirlo, y la prosa es el componente mas caro del paquete",
+        "context",
+    ),
+    (
+        "rd-r5",
+        "Timeouts de 10 minutos por invocacion, 30 por tarea y 8 horas por plan",
+        "Timeouts agresivos de 60 segundos, 5 minutos y 1 hora",
+        "Cancelar no cancela el coste: un vencimiento falso es una invocacion pagada y perdida",
+        "orchestrator",
+    ),
+    (
+        "rd-r6",
+        "v1 tiene un solo rol con invocacion de modelo y los esqueletos entran por API",
+        "Incluir tambien al Arquitecto para generar los esqueletos",
+        "El trabajo de prompts es lo mas caro de iterar y un esqueleto a mano es el control "
+        "del experimento",
+        "alcance",
+    ),
+    (
+        "rd-r8",
+        "Tetragramas contra todos los capitulos anteriores, umbral de 2 apariciones",
+        "Ventana de N capitulos anteriores",
+        "El trigrama en castellano dispara falsos positivos y la repeticion que mas molesta "
+        "es la de larga distancia",
+        "quality",
+    ),
+)
+
 ESQUEMA = """
 -- ---------------------------------------------------------------- canon y estructura
 CREATE TABLE brief (
@@ -282,6 +349,23 @@ CREATE TABLE tarea_evento (
     timestamp TEXT NOT NULL
 );
 
+-- Idempotencia: reejecutar con la misma clave devuelve el artefacto ya producido en
+-- lugar de volver a invocar el modelo (RF-ORQ-13). La clave son los seis campos de
+-- architecture.md 6.4, no un identificador inventado: dos ejecuciones son la misma
+-- ejecucion cuando coinciden en todos ellos.
+CREATE TABLE artefacto_de_tarea (
+    plan_id TEXT NOT NULL,
+    objetivo TEXT NOT NULL,
+    revision_de_canon INTEGER NOT NULL,
+    hash_del_paquete TEXT NOT NULL,
+    version_de_prompt TEXT NOT NULL,
+    intento INTEGER NOT NULL,
+    artefacto_id TEXT NOT NULL,
+    creado_en TEXT NOT NULL,
+    PRIMARY KEY (plan_id, objetivo, revision_de_canon, hash_del_paquete,
+                 version_de_prompt, intento)
+);
+
 CREATE TABLE borrador (
     id TEXT PRIMARY KEY,
     escena_id TEXT NOT NULL REFERENCES escena(id),
@@ -291,6 +375,7 @@ CREATE TABLE borrador (
         'propuesto', 'en_revision', 'aceptado', 'rechazado', 'obsoleto')),
     recuento_palabras INTEGER NOT NULL DEFAULT 0,
     procedencia_id TEXT REFERENCES procedencia(id),
+    obsoleto INTEGER NOT NULL DEFAULT 0,
     UNIQUE (escena_id, version)
 );
 
@@ -355,6 +440,14 @@ def upgrade() -> None:
         op.execute(
             "INSERT INTO predicado (nombre, exclusividad, descripcion) "
             f"VALUES ('{nombre}', '{exclusividad}', '{descripcion}')"
+        )
+
+    for identificador, decision, alternativas, motivo, ambito in DECISIONES_REGISTRADAS:
+        op.execute(
+            "INSERT INTO registro_decision "
+            "(id, decision, alternativas, motivo, ambito, reversible, tomada_en) VALUES "
+            f"('{identificador}', '{decision}', '{alternativas}', '{motivo}', "
+            f"'{ambito}', 1, datetime('now'))"
         )
 
     op.execute(

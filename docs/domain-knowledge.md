@@ -426,7 +426,7 @@ Quién puede bloquear una puerta y quién solo penaliza está en `architecture.m
 
 ## 8. Núcleo mínimo viable
 
-Las 12 clases con las que arrancar, más `Volumen` como contenedor, en forma directamente traducible a esquema.
+Las 12 clases con las que arrancar, más `Volumen` como contenedor y `Predicado` como catálogo, en forma directamente traducible a esquema. Con esas dos añadidas deja de ser el núcleo mínimo estricto y pasa a ser el esquema de la primera versión del backend.
 
 ```mermaid
 erDiagram
@@ -441,6 +441,7 @@ erDiagram
     ESCENA ||--o{ SIEMBRA_PAGO : siembra
     EVENTO ||--o{ HECHO : establece
     EVENTO }o--o{ PERSONAJE : participan
+    HECHO }o--|| PREDICADO : usa
     HECHO }o--|| PERSONAJE : sujeto_personaje
     HECHO }o--|| LUGAR : sujeto_lugar
     PERSONAJE ||--o| PERFIL_ESTILO : idiolecto
@@ -474,6 +475,11 @@ erDiagram
         int posicion_en_historia
         string tipo
         string visibilidad
+    }
+    PREDICADO {
+        string nombre PK
+        string exclusividad
+        string descripcion
     }
     HECHO {
         string id PK
@@ -541,6 +547,8 @@ erDiagram
         string estado
     }
 ```
+
+`PREDICADO` es lo que hace ejecutable la contradicción de hechos: sin saber qué predicados son mutuamente excluyentes, el invariante de intervalos solapados no se puede evaluar.
 
 Dos observaciones sobre este esquema. `HECHO.valido_desde` y `valido_hasta` apuntan a `EVENTO`, no a fechas: es lo que hace posible la validación de intervalos. Y `BORRADOR` es la única tabla con texto largo — todo lo demás es estructura consultable.
 
