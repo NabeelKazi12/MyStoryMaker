@@ -4,7 +4,7 @@
 
 ## Cómo leer estos diagramas
 
-Ocho diagramas Mermaid del mismo modelo, de lo general a lo ejecutable; las definiciones de cada clase están en el documento hermano.
+Ocho apartados del mismo modelo, de lo general a lo ejecutable: siete llevan diagrama Mermaid y el 5 conserva su número con el contenido movido a `architecture.md` §6.2. Las definiciones de cada clase están en el documento hermano.
 
 | Diagrama | Tipo | Responde |
 | --- | --- | --- |
@@ -426,7 +426,7 @@ Quién puede bloquear una puerta y quién solo penaliza está en `architecture.m
 
 ## 8. Núcleo mínimo viable
 
-Las 12 clases con las que arrancar, en forma directamente traducible a esquema.
+Las 12 clases con las que arrancar, más `Volumen` como contenedor, en forma directamente traducible a esquema.
 
 ```mermaid
 erDiagram

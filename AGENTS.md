@@ -258,7 +258,8 @@ cuestionables.
 
 **Objetivo.** Puntuar contra `Rubrica` en las dimensiones no deterministas: naturalidad
 del diálogo, densidad de cliché, consistencia de motivación, coherencia temática, impacto
-emocional, tensión, especificidad sensorial, exposición forzada.
+emocional, tensión y curiosidad, especificidad sensorial, exposición forzada y
+variedad sintáctica percibida.
 
 **Reglas:**
 
@@ -297,8 +298,8 @@ cuenta convierte errores detectables en deriva silenciosa.
 | Outline aprobado | Antes de redactar | Conformidad estructural, presupuestos, todo hilo con pregunta dramática | Bloqueante |
 | Escena limpia | Antes de aceptar un borrador | Los 8 invariantes bloqueantes | Bloqueante |
 | Capítulo cerrado | Fin de capítulo | Continuidad acumulada, n-gramas, presupuesto | Bloqueante |
-| Acto cerrado | Fin de acto | Curvas de tensión, hilos activos, beats de plantilla | Advertencia |
-| Volumen cerrado | Final | Siembras resueltas, hilos resueltos, promesa al lector | Bloqueante |
+| Acto cerrado | Fin de acto | Curvas de tensión, hilos inactivos, beats de plantilla, frecuencia de motivos | Advertencia |
+| Volumen cerrado | Final | Siembras resueltas, hilos resueltos, preguntas dramáticas respondidas, arcos con estado terminal, promesa al lector | Bloqueante |
 
 Los invariantes concretos de cada puerta están en el apartado «Invariantes y reglas de
 validación» del documento de definiciones y viven como tests en `backend/quality/`.

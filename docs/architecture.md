@@ -330,7 +330,7 @@ tabla es el orden del paquete, que fija `AGENTS.md` §4.5 y es parte del contrat
 | 4 | Arco: pirámide de resúmenes de parte, capítulo y escenas | 4.000 | 1.º | Se sueltan primero los niveles más lejanos |
 | 5 | Voz: perfil global más idiolectos presentes | 1.500 | 5.º | Fuera los idiolectos sin diálogo en la escena |
 | 6 | Epistémico: lo que el POV sabe e ignora | 2.000 | No | Recortarlo produce fugas de información |
-| 7 | Promesas: siembras abiertas y motivos pendientes | 1.000 | 2.º | Solo siembras lejanas a su límite |
+| 7 | Promesas: siembras abiertas y motivos pendientes | 1.000 | 2.º | Fuera las siembras lejanas a su límite |
 | 8 | Instrucción: esqueleto de escena | 1.000 | No | Truncarla es perder el encargo |
 | — | Defectos y críticas abiertas del intento anterior | — | No | Va al final: es lo que cambia en cada intento |
 | — | Margen de seguridad | 3.000 | — | |
@@ -698,7 +698,12 @@ existe.
 - Repetición de n-gramas contra los capítulos anteriores, y diversidad léxica.
 - Siembras sin pagar pasado su límite; hilos inactivos más de N escenas.
 - Deriva de nombres y alias no declarados; consistencia de tiempo verbal y persona.
+- Conformidad de beats respecto a la `PlantillaEstructural`; frecuencia de motivos frente a su objetivo.
 - Presupuesto de palabras por capítulo y acto.
+- Valencia de `Relación` cambiada sin evento que la justifique; evento narrado sin
+  posición en la línea temporal.
+- Restricciones duras verificables por programa, políticas de contenido y tabúes
+  del `Brief`.
 
 **Todo `Defecto` llega con evidencia citable.** Sin evidencia se descarta antes de llegar al
 Orquestador, y el descarte se cuenta: la proporción descartada es la señal de que un agente
@@ -712,7 +717,7 @@ está opinando en vez de comprobando.
 | Escena limpia | Antes de aceptar un borrador | Los ocho invariantes bloqueantes de `definitions.md` | Bloqueante |
 | Capítulo cerrado | Fin de capítulo | Continuidad acumulada, n-gramas contra capítulos anteriores, presupuesto | Bloqueante |
 | Acto cerrado | Fin de acto | Curva de tensión, hilos inactivos, conformidad de beats, frecuencia de motivos | Advertencia |
-| Volumen cerrado | Final | Siembras sin pagar, hilos resueltos, arcos terminales, promesa al lector | Bloqueante |
+| Volumen cerrado | Final | Siembras sin pagar, hilos resueltos, preguntas dramáticas respondidas, arcos terminales, promesa al lector | Bloqueante |
 
 *Acto cerrado* es la única de advertencia, y lo es porque todo lo que cobra es de grado: un acto
 con la curva algo plana sigue siendo un acto. Las otras cuatro cobran predicados binarios.

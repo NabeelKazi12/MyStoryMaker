@@ -301,7 +301,7 @@ implementar una regla nueva:
 
 1. Escribe el test que la viola y falla.
 2. Implementa el verificador.
-3. Comprueba que el test pasa y que `make test-invariants` sigue verde.
+3. Comprueba que el test pasa y que `uv run pytest -m invariants` sigue verde.
 
 Un invariante sin test no existe.
 
@@ -341,7 +341,7 @@ consigo mismo mientras se separa del texto real.
   un bucle de revisión perpetua.
 - No añadas dependencias de red en `backend/domain/`.
 - No invoques modelos desde `backend/api/`. Encola una `Tarea`.
-- No duplique un invariante en el frontend. Si React necesita validar, llama a la API.
+- No dupliques un invariante en el frontend. Si React necesita validar, llama a la API.
 - No hagas escrituras concurrentes a SQLite desde varios agentes.
 - No subas el presupuesto de tokens del paquete para que quepa. Aprieta los filtros.
 - No borres un `RegistroDeDecision`. Son inmutables.

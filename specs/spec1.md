@@ -26,7 +26,7 @@ se quedan abiertas, contexto de tamaño constante— es hoy una intención sin e
 
 Las consecuencias concretas de esa ausencia:
 
-1. **Ningún invariante existe.** `CLAUDE.md` §7.1 y `AGENTS.md` §5 dicen que un invariante
+1. **Ningún invariante existe.** `CLAUDE.md` §7.1 y `AGENTS.md` §10.4 dicen que un invariante
    sin test no existe. No hay tests, luego no hay invariantes: los ocho bloqueantes de
    `definitions.md` son prosa.
 2. **No hay dónde poner el canon.** Sin esquema de SQLite ni capa `store/`, no existe la
@@ -137,7 +137,7 @@ alta de Brief, Volumen, Capítulo, Personajes, Lugares, Eventos e Hilos por API
   → el worker invoca al Redactor y devuelve prosa + hechos_nuevos_detectados + Procedencia
   → los verificadores deterministas evalúan la puerta Escena limpia
       · limpia     → Borrador aceptado → canonización → revisión de canon + 1
-      · defectuosa → escalera de reintentos de architecture.md §5.4 hasta escalado
+      · defectuosa → escalera de reintentos de architecture.md §6.3 hasta escalado
   → todo el recorrido visible por SSE y reproducible desde la Procedencia archivada
 ```
 
@@ -171,7 +171,7 @@ sensibles en v1:
 - **S-5** (un solo proceso de backend, sin réplicas) sostiene que un contador en memoria
   acote algo. Si cae, el semáforo tiene que ser distribuido.
 
-Supuesto propio de esta spec, que no estaba declarado:
+Supuesto propio de esta spec, hoy recogido también en `architecture.md` §11:
 
 - **S-9.** Una `Escena` de v1 se puede redactar sin filtro epistémico porque su ausencia
   produce falsos negativos —defectos que no se detectan—, no falsos positivos. Si
@@ -219,7 +219,7 @@ documento que lo impone, para que un cambio en `docs/` se note aquí.
 | --- | --- | --- |
 | RF-CTX-01 | El ensamblador construye el `PaqueteDeContexto` con los componentes en el orden del contrato de rol —estático, estado del mundo, continuidad, arco, voz, epistémico, promesas, instrucción, y los defectos abiertos al final—, y ese orden es parte del contrato | `AGENTS.md` §4.5; `architecture.md` §4.7 D-16 |
 | RF-CTX-02 | El ensamblador cuenta los tokens **antes** de invocar y almacena el recuento real por componente en el `PaqueteDeContexto` | `architecture.md` §4.4 |
-| RF-CTX-03 | Un paquete que excede su presupuesto no se trunca: la `Tarea` pasa a `bloqueada` con `falta`. En ningún caso se recorta por la cola | `architecture.md` §4.1, §7.4 D-12 |
+| RF-CTX-03 | Un paquete que excede su presupuesto no se trunca: la `Tarea` pasa a `bloqueada` con `falta`. En ningún caso se recorta por la cola | `architecture.md` §4.1, §4.5 D-12 |
 | RF-CTX-04 | El recorte por componente sigue el orden fijo de `architecture.md` §4.5, y los componentes *estático*, *instrucción* y *epistémico* no se recortan nunca | `architecture.md` §4.5 D-12 |
 | RF-CTX-05 | El filtro temporal —hechos vigentes en el `momento_en_historia` de la escena— se aplica antes que cualquier filtro posterior, y el punto de inserción del filtro epistémico queda explícito aunque en v1 no filtre nada | `architecture.md` §4.4 |
 | RF-CTX-06 | El `PaqueteDeContexto` referencia la revisión de canon con la que se construyó y lleva un `hash` estable: mismo canon, misma escena y misma versión de prompt producen el mismo hash | `architecture.md` §9 |
@@ -318,8 +318,8 @@ RF-QUA-14, para que nadie los dé por cubiertos.
 | RNF-01 | `domain/` no importa de ningún otro paquete, ni de FastAPI ni de Pydantic | `architecture.md` §2.3 |
 | RNF-02 | `quality/` importa de `domain/` y nunca de `agents/` | `architecture.md` §2.3 |
 | RNF-03 | `agents/` no importa de `agents/` | `architecture.md` §2.3 |
-| RNF-04 | El crédito total del semáforo es 100.000 y el grado de paralelismo por defecto es 1, configurable | `architecture.md` §4.1, §10 |
-| RNF-05 | Se registran las cuatro señales de `architecture.md` §9: reintentos por tipo de `Defecto`, deriva entre reserva y uso real, tokens por componente, y tiempo en cola por prioridad | `architecture.md` §9 |
+| RNF-04 | El crédito total del semáforo es 100.000 y el grado de paralelismo por defecto es 1, configurable | `architecture.md` §4.1, §13 |
+| RNF-05 | Se registran cuatro de las cinco señales de `architecture.md` §9: reintentos por tipo de `Defecto`, deriva entre reserva y uso real, tokens por componente, y tiempo en cola por prioridad | `architecture.md` §9 |
 | RNF-06 | `uv run pytest`, `uv run pytest -m invariants`, `ruff check`, `ruff format --check` y `mypy backend/` pasan en verde | `CLAUDE.md` §6 |
 | RNF-07 | Todo invariante de 4.4 tiene un test que se ha visto fallar por el motivo correcto antes de implementarlo | `AGENTS.md` §10.4 |
 | RNF-08 | Los comandos de `CLAUDE.md` §6 funcionan tal como están escritos al cerrar el cambio | `CLAUDE.md` §6 |
@@ -537,7 +537,7 @@ de `verification.md` §10:
 | --- | --- |
 | `definitions.md` | **Cambia.** Añade la clase `Predicado` —catálogo de RF-STO-07— y el vocabulario cerrado `exclusividad_de_predicado` con los valores `funcional` y `multivalor`. Exige `RegistroDeDecision`, según `AGENTS.md` §10.1 |
 | `domain-knowledge.md` | **Cambia.** El diagrama 8, núcleo mínimo viable, incorpora `PREDICADO` y su arista con `HECHO` |
-| `architecture.md` | **Cambia al cerrar.** §13 recibe el supuesto S-9 de 3.5. Las cifras de §8.5 se corrigen con lo que registre `Procedencia`, según el TODO que ese apartado ya declara |
+| `architecture.md` | **Cambia al cerrar.** Las cifras de §4.2 se corrigen con lo que registre `Procedencia`, según el TODO que ese apartado ya declara. El supuesto S-9 de 3.5 ya está recogido en §11 |
 | `verification.md` | **Cambia al cerrar.** §10 pierde los huecos que v1 cierra y gana los que v1 abre, enumerados en 8.8 |
 | `AGENTS.md`, `CLAUDE.md` | Sin cambios. v1 implementa lo que ya dicen |
 
@@ -609,8 +609,8 @@ El cambio se puede dar por cerrado cuando **todos** se cumplen:
 ## 12. Preguntas abiertas
 
 **Bloquean la aprobación de esta spec.** Ninguna se ha resuelto por suposición razonable.
-Las cinco primeras vienen de `architecture.md` §12 y afectan directamente a v1; las tres
-últimas las abre esta spec.
+Las cuatro primeras vienen de `architecture.md` §12 y la quinta del TODO de su §6.5;
+todas afectan directamente a v1. Las tres últimas las abre esta spec.
 
 | # | Pregunta | Qué bloquea |
 | --- | --- | --- |

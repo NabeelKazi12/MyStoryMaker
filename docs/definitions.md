@@ -1,4 +1,3 @@
-[definitions.md](https://github.com/user-attachments/files/32475074/definitions.md)
 # Ontología para generación agéntica de novelas — Definiciones
 
 2026-09-21 · @Nabeel
@@ -113,7 +112,7 @@ Invariante crítico: ningún `EventoNarrativo` puede violar una `ReglaDelMundo` 
 
 Ocurrencia atómica y fechable en tiempo de historia que cambia el estado del mundo. Es la clase pivote del plano.
 
-Atributos: `id`, `descripción`, `posición_en_tiempo_de_historia` (orden parcial u ordinal), `duración`, `lugar`, `participantes[]` con rol (agente / paciente / testigo / mencionado), `tipo` (acción, decisión, revelación, encuentro, muerte, cambio de estado), `visibilidad` (público / privado / secreto), `es_narrado` (D).
+Atributos: `id`, `descripción`, `posición_en_tiempo_de_historia` (orden parcial u ordinal), `duración`, `lugar`, `participantes[]` con rol (agente / paciente / testigo / mencionado), `tipo` (acción, decisión, revelación, encuentro, pérdida, cambio de estado), `visibilidad` (público / privado / secreto), `es_narrado` (D).
 
 Relaciones: `causa` / `posibilita` / `impide` → `EventoNarrativo` (`*`), `establece` → `Hecho` (`*`), `invalida` → `Hecho` (`*`), `narrado_por` → `Escena` (`*`).
 
@@ -260,8 +259,8 @@ Función especializada con responsabilidad, permisos de escritura y herramientas
 
 | Rol | Escribe en | Responsabilidad |
 | --- | --- | --- |
-| Orquestador | Tarea, Plan | Descompone y asigna; no escribe prosa |
-| Arquitecto | Hilo, Escena (esqueleto), PlantillaEstructural | Estructura global y outline |
+| Orquestador | Tarea, Plan, Puerta | Descompone y asigna; no escribe prosa |
+| Arquitecto | Hilo, Escena (esqueleto), ParSiembraPago | Estructura global y outline |
 | Worldbuilder | Entidad, ReglaDelMundo, Lore | Consistencia del mundo |
 | Guardián de Continuidad | Defecto | Solo lectura sobre el canon; solo reporta |
 | Redactor | Borrador | Prosa de escena |
@@ -412,7 +411,7 @@ Filtro que decide qué entra en un paquete. Tres dimensiones combinadas:
 
 ### Políticas
 
-La mecánica de la **canonización** y de la **invalidación en cascada** es arquitectura, no dominio, y está en `architecture.md` §8, §4.3 y §7.3. Lo que este documento fija es la regla que ninguna implementación puede saltarse: un hecho que contradice el canon genera un `Defecto` y nunca lo sobrescribe.
+La mecánica de la **canonización** y de la **invalidación en cascada** es arquitectura, no dominio, y está en `architecture.md` §8 y §4.6. Lo que este documento fija es la regla que ninguna implementación puede saltarse: un hecho que contradice el canon genera un `Defecto` y nunca lo sobrescribe.
 
 ## Capa de calidad
 
@@ -549,6 +548,7 @@ Cerrar estos conjuntos es lo que permite consultar y validar; si son texto libre
 | `tipo_de_siembra` | objeto · habilidad · información · amenaza · relación · pregunta |
 | `estado_de_siembra` | abierto · resuelto · subvertido · abandonado |
 | `estado_de_borrador` | propuesto · en\_revisión · aceptado · rechazado · obsoleto |
+| `estado_de_tarea` | pendiente · lista · en\_curso · en\_verificación · aceptada · rechazada · escalada · fallida · bloqueada · cancelada |
 | `severidad` | crítica · alta · media · baja · informativa |
 | `modo_de_verificación` | programa · juez\_llm · humano |
 | `dureza_de_restricción` | dura · blanda |
