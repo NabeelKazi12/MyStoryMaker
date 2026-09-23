@@ -11,10 +11,14 @@ import pytest
 
 from backend.domain.diegetic.canon import (
     Entidad,
+    EventoDeCronologia,
     EventoNarrativo,
     Hecho,
     Lugar,
+    Participacion,
     Personaje,
+    cronologia_de,
+    sin_momento,
 )
 from backend.domain.discursive.relato import Escena, Hilo, ParSiembraPago
 from backend.domain.errors import ErrorDeDominio
@@ -26,13 +30,15 @@ from backend.domain.production.ejecucion import (
     RegistroDeDecision,
     Tarea,
 )
-from backend.domain.spec.encargo import Brief
+from backend.domain.spec.encargo import Brief, Destinatario, ElementoPersonalizado
 from backend.domain.vocabularies import (
     ClaseDeFallo,
     EstadoDeSiembra,
     FuncionEnTrama,
     Relevancia,
+    RolEnEvento,
     Severidad,
+    TipoDeElementoPersonalizado,
     TipoDeEscena,
     TipoDeEvento,
     TipoDeHilo,
@@ -325,3 +331,157 @@ def test_recuento_de_palabras_es_derivado() -> None:
     """Se calcula del texto: un recuento declarado a mano miente en cuanto se edita."""
     borrador = Borrador(id="bo-1", escena_id="esc-1", version=1, texto="tres palabras aqui")
     assert borrador.recuento_palabras == 3
+
+
+# --- SPEC-003 A-01: el destinatario y sus elementos personalizados -------------------
+
+
+@pytest.mark.invariants
+def test_destinatario_exige_nombre_y_al_menos_un_elemento_obligatorio() -> None:
+    """Una novela de regalo sin nada que la ate a quien la recibe es una novela generica.
+
+    El nombre es lo que el validador de RF-VAL-02 compara caracter a caracter, y el
+    elemento obligatorio es lo que RF-VAL-04 busca en los capitulos: sin ninguno de los
+    dos no hay nada que comprobar y la personalizacion deja de ser verificable.
+    """
+    recuerdo = ElementoPersonalizado(
+        id="ep-1",
+        tipo=TipoDeElementoPersonalizado.RECUERDO,
+        contenido="el verano en que aprendio a nadar en Gijon",
+    )
+    destinatario = Destinatario(
+        id="de-1",
+        nombre="Marta",
+        edad=34,
+        elementos=(recuerdo,),
+        dedicatoria="Para Marta, que siempre vuelve al mar.",
+    )
+
+    assert destinatario.nombre == "Marta"
+    assert destinatario.elementos_obligatorios == (recuerdo,)
+
+    with pytest.raises(ErrorDeDominio) as sin_nombre:
+        dataclasses.replace(destinatario, nombre="   ")
+    assert "nombre" in str(sin_nombre.value)
+
+    with pytest.raises(ErrorDeDominio) as sin_elementos:
+        dataclasses.replace(destinatario, elementos=())
+    assert "elemento" in str(sin_elementos.value)
+
+
+@pytest.mark.invariants
+def test_un_elemento_opcional_no_cuenta_como_obligatorio() -> None:
+    """RF-VAL-04 solo puede exigir en los capitulos lo que se declaro obligatorio."""
+    opcional = ElementoPersonalizado(
+        id="ep-2",
+        tipo=TipoDeElementoPersonalizado.RASGO,
+        contenido="le gusta discutir de cine",
+        obligatorio=False,
+    )
+    obligatorio = ElementoPersonalizado(
+        id="ep-3",
+        tipo=TipoDeElementoPersonalizado.VINCULO,
+        contenido="su hermana Clara",
+    )
+    destinatario = Destinatario(
+        id="de-2", nombre="Luis", edad=8, elementos=(opcional, obligatorio)
+    )
+
+    assert destinatario.elementos_obligatorios == (obligatorio,)
+
+
+@pytest.mark.invariants
+def test_una_edad_imposible_no_construye_destinatario() -> None:
+    """La edad alimenta la deteccion de contradicciones de RF-CFG-04; si miente, calla."""
+    with pytest.raises(ErrorDeDominio):
+        Destinatario(
+            id="de-3",
+            nombre="Nadie",
+            edad=0,
+            elementos=(
+                ElementoPersonalizado(
+                    id="ep-4",
+                    tipo=TipoDeElementoPersonalizado.RECUERDO,
+                    contenido="cualquiera",
+                ),
+            ),
+        )
+
+
+# --- SPEC-003 A-02: la cronologia que alimenta al validador formal -------------------
+
+
+@pytest.mark.invariants
+def test_un_evento_de_cronologia_sin_momento_no_existe() -> None:
+    """Lean compara momentos. Un evento sin momento no se puede ordenar ni fechar.
+
+    `posicion_en_historia` ordena, pero no fecha: con solo un orden no se puede decir que
+    edad tenia un personaje, que es el segundo invariante que RF-LEAN-02 pide.
+    """
+    with pytest.raises(ErrorDeDominio) as error:
+        EventoDeCronologia(
+            evento_id="ev-1", momento=None, lugar_id="lu-1", personajes=("pe-1",)
+        )
+    assert "momento" in str(error.value)
+
+
+@pytest.mark.invariants
+def test_la_cronologia_se_deriva_del_canon_y_no_se_declara_aparte() -> None:
+    """Una cronologia escrita a mano diverge del canon en cuanto alguien edita un evento."""
+    evento = EventoNarrativo(
+        id="ev-1",
+        descripcion="Marta aprende a nadar",
+        posicion_en_historia=10,
+        tipo=TipoDeEvento.ACCION,
+        momento=1998,
+        lugar_id="lu-gijon",
+        participantes=(Participacion(entidad_id="pe-marta", rol=RolEnEvento.AGENTE),),
+    )
+
+    (fila,) = cronologia_de((evento,))
+
+    assert fila.evento_id == "ev-1"
+    assert fila.momento == 1998
+    assert fila.lugar_id == "lu-gijon"
+    assert fila.personajes == ("pe-marta",)
+
+
+@pytest.mark.invariants
+def test_un_evento_sin_momento_queda_fuera_de_la_cronologia_y_se_puede_contar() -> None:
+    """No se inventa un momento para completar: lo que falta se declara, no se rellena."""
+    fechado = EventoNarrativo(
+        id="ev-1",
+        descripcion="con fecha",
+        posicion_en_historia=10,
+        tipo=TipoDeEvento.ACCION,
+        momento=1998,
+    )
+    sin_fechar = EventoNarrativo(
+        id="ev-2",
+        descripcion="sin fecha",
+        posicion_en_historia=20,
+        tipo=TipoDeEvento.ACCION,
+    )
+
+    filas = cronologia_de((fechado, sin_fechar))
+
+    assert [f.evento_id for f in filas] == ["ev-1"]
+    assert sin_momento((fechado, sin_fechar)) == ("ev-2",)
+
+
+@pytest.mark.invariants
+def test_la_edad_de_un_personaje_en_un_evento_se_deriva_de_su_nacimiento() -> None:
+    """Es el dato que el segundo invariante de Lean comprueba (RF-LEAN-02)."""
+    marta = Personaje(id="pe-marta", nombre_canonico="Marta", anio_de_nacimiento=1990)
+    sin_fecha = Personaje(id="pe-x", nombre_canonico="Anonimo")
+
+    assert marta.edad_en(1998) == 8
+    assert marta.edad_en(1990) == 0
+    assert sin_fecha.edad_en(1998) is None
+
+
+@pytest.mark.invariants
+def test_un_personaje_no_puede_nacer_despues_de_un_evento_en_que_participa() -> None:
+    """La incoherencia que el brief adversarial de RF-EVA-01 siembra a proposito."""
+    nino = Personaje(id="pe-nino", nombre_canonico="Nino", anio_de_nacimiento=2010)
+    assert nino.edad_en(1998) == -12, "la edad negativa no se corrige aqui: la detecta Lean"

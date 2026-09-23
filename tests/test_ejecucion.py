@@ -260,8 +260,10 @@ def test_las_decisiones_de_la_spec_estan_registradas(conn: sqlite3.Connection) -
         "SELECT id, alternativas, motivo FROM registro_decision ORDER BY id"
     ).fetchall()
 
-    assert len(filas) == 9
+    assert len(filas) == 11
     identificadores = {f["id"] for f in filas}
+    # SPEC-003 A-03 anade dos: la ontologia del destinatario y la cronologia como vista.
+    assert {"rd-d18", "rd-d19"} <= identificadores
     assert "rd-predicados" in identificadores
     # D-17 no borra a R-1: la sustituye y la cita como alternativa descartada. Una
     # decision que desaparece del registro deja de poder contradecirse a la vista.

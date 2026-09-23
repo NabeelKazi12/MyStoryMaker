@@ -85,7 +85,20 @@ RULES: tuple[Rule, ...] = (
         forbidden_external=SQL_LIBS | VECTOR_LIBS | MODEL_LIBS,
         reason="orchestrator/ decide; invocar modelos es del worker y abrir SQLite, del store",
     ),
+    # SPEC-003, 10.1. El paquete llega en la fase D; la regla se escribe antes de que
+    # exista, que es cuando todavia no cuesta nada respetarla.
+    Rule(
+        package="observability",
+        forbidden_internal=frozenset({"agents", "api", "orchestrator", "worker", "quality"}),
+        forbidden_external=SQL_LIBS | VECTOR_LIBS | MODEL_LIBS,
+        reason="observability/ observa y no participa: no invoca modelos ni abre la base",
+    ),
 )
+
+# La otra mitad de la regla de observabilidad: quien no puede mirar hacia ella. Un juez
+# que sabe que esta siendo observado es un juez distinto, y un verificador que emite su
+# propio score deja de ser comprobable sin red.
+SIN_ACCESO_A_OBSERVABILIDAD: tuple[str, ...] = ("domain", "quality", "agents")
 
 
 def _module_name(path: Path) -> str:
@@ -181,3 +194,27 @@ def test_el_esqueleto_de_paquetes_esta_completo() -> None:
     }
     missing = {name for name in expected if not (BACKEND / name / "__init__.py").is_file()}
     assert not missing, f"Faltan paquetes del esqueleto: {sorted(missing)}"
+
+
+@pytest.mark.invariants
+@pytest.mark.parametrize("paquete", SIN_ACCESO_A_OBSERVABILIDAD)
+def test_nadie_que_juzgue_importa_la_observabilidad(paquete: str) -> None:
+    """SPEC-003, 10.1: `domain/`, `quality/` y `agents/` no conocen a Langfuse.
+
+    La instrumentacion vive en `orchestrator/`, `worker/` y `api/`. Si un verificador
+    emitiera su propio score, dejaria de poder ejecutarse sin red y la suite pasaria a
+    depender de un servicio externo para comprobar una regla del dominio.
+    """
+    raiz = BACKEND / paquete
+    if not raiz.exists():
+        pytest.skip(f"{paquete}/ no existe todavia")
+
+    infracciones = [
+        f"{_module_name(fichero)} importa {importado}"
+        for fichero in sorted(raiz.rglob("*.py"))
+        for importado in _imports(fichero)
+        if importado.startswith("backend.observability")
+        or _root(importado) in {"langfuse", "opentelemetry"}
+    ]
+
+    assert not infracciones, "; ".join(infracciones)

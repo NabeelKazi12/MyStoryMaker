@@ -203,6 +203,19 @@ class ExclusividadDePredicado(VocabularioCerrado):
     MULTIVALOR = "multivalor"
 
 
+class TipoDeElementoPersonalizado(VocabularioCerrado):
+    """Que ata una novela a quien la recibe. De `definitions.md`, apartado Destinatario.
+
+    Tres valores y no mas: son los que el rol entrevistador sabe recoger y los que el
+    validador de RF-VAL-04 sabe buscar en los capitulos. Un cuarto valor que nadie
+    comprueba seria vocabulario decorativo (`CLAUDE.md` 5.2).
+    """
+
+    RECUERDO = "recuerdo"
+    RASGO = "rasgo"
+    VINCULO = "vinculo"
+
+
 class ClaseDeFallo(VocabularioCerrado):
     """Las cuatro clases de `architecture.md` 6.5 D-06.
 

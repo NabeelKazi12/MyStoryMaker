@@ -55,7 +55,8 @@ def test_la_migracion_sella_su_version(base_migrada: Path) -> None:
     """
     with _conexion(base_migrada) as conn:
         sellada = conn.execute("SELECT version_num FROM alembic_version").fetchall()
-    assert [fila[0] for fila in sellada] == ["0001"]
+    # La cabeza avanza con cada migracion encadenada; hoy es 0002 (SPEC-003, A-03).
+    assert [fila[0] for fila in sellada] == ["0002"]
 
 
 @pytest.mark.invariants
@@ -239,3 +240,91 @@ def _material_minimo(conn: sqlite3.Connection) -> None:
         "'recuperar la carta', 'el guardia', 'la consigue', 'seguro', 'expuesto', "
         "'complicacion', 'accion')"
     )
+
+
+# --- SPEC-003 A-03: las siete tablas de la memoria del regalo ------------------------
+
+TABLAS_DE_0002 = (
+    "destinatario",
+    "elemento_personalizado",
+    "hecho_capitulo",
+    "resumen_capitulo",
+    "checkpoint_capitulo",
+    "lista_prohibida",
+    "audit_log",
+    "version_novela",
+    "version_capitulo",
+)
+
+
+@pytest.mark.invariants
+def test_migracion_0002_crea_las_tablas_de_la_memoria_del_regalo(base_migrada: Path) -> None:
+    """Sin ellas, cinco de las siete areas del alcance no tienen donde escribir."""
+    with sqlite3.connect(base_migrada) as conn:
+        presentes = {
+            fila[0]
+            for fila in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+
+    assert set(TABLAS_DE_0002) <= presentes
+
+
+@pytest.mark.invariants
+def test_la_cronologia_es_una_vista_y_no_una_copia(base_migrada: Path) -> None:
+    """Una cronologia duplicada diverge del canon en cuanto alguien edita un evento.
+
+    Se comprueba que `evento_cronologia` existe como vista, no como tabla: si algun dia
+    alguien la convierte en tabla, este test lo dice antes de que las dos copias empiecen
+    a discrepar en silencio.
+    """
+    with sqlite3.connect(base_migrada) as conn:
+        fila = conn.execute(
+            "SELECT type FROM sqlite_master WHERE name = 'evento_cronologia'"
+        ).fetchone()
+
+    assert fila is not None, "la cronologia de RF-BIB-02 no existe"
+    assert fila[0] == "view"
+
+
+@pytest.mark.invariants
+def test_un_hecho_registra_los_capitulos_en_que_se_usa(base_migrada: Path) -> None:
+    """RF-BIB-01. Es la precondicion de la regeneracion selectiva de RF-LEC-05.
+
+    Sin saber que capitulos usan un hecho, cambiar ese hecho obliga a regenerar la novela
+    entera, que es justo lo que el alcance pide no hacer.
+    """
+    with sqlite3.connect(base_migrada) as conn:
+        columnas = {fila[1] for fila in conn.execute("PRAGMA table_info(hecho_capitulo)")}
+        claves = [fila for fila in conn.execute("PRAGMA foreign_key_list(hecho_capitulo)")]
+
+    assert {"hecho_id", "capitulo_id"} <= columnas
+    # Solo el capitulo tiene clave foranea: la identidad de un hecho vive en el canon
+    # versionado (`canon_cambio`), no en una fila de `hecho`, asi que exigirla haria
+    # fallar toda canonizacion.
+    assert {fila[2] for fila in claves} == {"capitulo"}
+
+
+@pytest.mark.invariants
+def test_las_listas_prohibidas_tienen_sus_tres_niveles(base_migrada: Path) -> None:
+    """RF-GRD-01: global, por novela y las que declara el cliente en la entrevista."""
+    with sqlite3.connect(base_migrada) as conn:
+        conn.execute(
+            "INSERT INTO lista_prohibida (id, nivel, termino) VALUES ('lp-1', 'global', 'x')"
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                "INSERT INTO lista_prohibida (id, nivel, termino) "
+                "VALUES ('lp-2', 'inventado', 'y')"
+            )
+        conn.rollback()
+
+
+@pytest.mark.invariants
+def test_una_version_de_novela_conserva_la_anterior(base_migrada: Path) -> None:
+    """RF-LEC-07. La version anterior no se sobrescribe: se encadena."""
+    with sqlite3.connect(base_migrada) as conn:
+        columnas = {fila[1] for fila in conn.execute("PRAGMA table_info(version_novela)")}
+        cambiados = {fila[1] for fila in conn.execute("PRAGMA table_info(version_capitulo)")}
+
+    assert {"numero", "anterior_id", "publicada_en"} <= columnas
+    assert {"version_id", "capitulo_id", "cambiado"} <= cambiados

@@ -8,7 +8,8 @@ barrido completo, y deja de funcionar justo cuando el libro crece (`architecture
 El canon versionado no se copia entero por revision: se guardan eventos de cambio y se
 reconstruye. Una copia por revision no escala a 40 capitulos.
 
-Cubre RF-STO-05, RF-STO-07 y RF-STO-08.
+Cubre RF-STO-05, RF-STO-07 y RF-STO-08, y desde SPEC-003 tambien RF-BIB-01 y
+RF-BIB-05.
 """
 
 from __future__ import annotations
@@ -16,9 +17,15 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 
-from backend.domain.diegetic.canon import Hecho, Predicado
+from backend.domain.diegetic.canon import (
+    EventoDeCronologia,
+    Hecho,
+    Lugar,
+    Personaje,
+    Predicado,
+)
 from backend.domain.errors import ErrorDeDominio
-from backend.domain.vocabularies import ExclusividadDePredicado
+from backend.domain.vocabularies import ExclusividadDePredicado, Relevancia
 
 
 @dataclass(frozen=True)
@@ -271,3 +278,240 @@ class ConsultasDeCalidad:
             )
             for f in filas
         )
+
+
+@dataclass(frozen=True)
+class StoryBible:
+    """Lectura de la story bible: quien, donde, que es cierto y cuando paso.
+
+    Es la unica puerta por la que la ficha de la lectura (RF-LEC-02) y el generador de
+    Lean (RF-LEAN-01) leen el canon. Que los dos lean por aqui es lo que garantiza que la
+    ficha que se publica y la cronologia que se verifica hablen de la misma historia.
+
+    Cubre RF-BIB-05.
+    """
+
+    conn: sqlite3.Connection
+
+    def personajes(self) -> tuple[Personaje, ...]:
+        filas = self.conn.execute(
+            "SELECT id, nombre_canonico, alias, relevancia, deseo_externo, "
+            "necesidad_interna, creencia_falsa, anio_de_nacimiento "
+            "FROM personaje ORDER BY id"
+        ).fetchall()
+        return tuple(
+            Personaje(
+                id=fila["id"],
+                nombre_canonico=fila["nombre_canonico"],
+                alias=tuple(a for a in fila["alias"].split("|") if a),
+                relevancia=Relevancia(fila["relevancia"]),
+                deseo_externo=fila["deseo_externo"],
+                necesidad_interna=fila["necesidad_interna"],
+                creencia_falsa=fila["creencia_falsa"],
+                anio_de_nacimiento=fila["anio_de_nacimiento"],
+            )
+            for fila in filas
+        )
+
+    def lugares(self) -> tuple[Lugar, ...]:
+        filas = self.conn.execute(
+            "SELECT id, nombre_canonico, alias, atmosfera_sensorial, contenido_en "
+            "FROM lugar ORDER BY id"
+        ).fetchall()
+        return tuple(
+            Lugar(
+                id=fila["id"],
+                nombre_canonico=fila["nombre_canonico"],
+                alias=tuple(a for a in fila["alias"].split("|") if a),
+                atmosfera_sensorial=fila["atmosfera_sensorial"],
+                contenido_en=fila["contenido_en"],
+            )
+            for fila in filas
+        )
+
+    def hechos(self) -> tuple[Hecho, ...]:
+        filas = self.conn.execute(
+            "SELECT id, sujeto_id, predicado, objeto, valido_desde, valido_hasta "
+            "FROM hecho ORDER BY id"
+        ).fetchall()
+        return tuple(
+            Hecho(
+                id=fila["id"],
+                sujeto_id=fila["sujeto_id"],
+                predicado=fila["predicado"],
+                objeto=fila["objeto"],
+                valido_desde=fila["valido_desde"],
+                valido_hasta=fila["valido_hasta"],
+            )
+            for fila in filas
+        )
+
+    def cronologia(self) -> tuple[EventoDeCronologia, ...]:
+        """La cronologia de RF-BIB-02, leida de la vista y agrupada por evento.
+
+        La vista devuelve una fila por participante; aqui se agrupan porque el invariante
+        de Lean razona sobre eventos, no sobre pares evento-personaje.
+        """
+        filas = self.conn.execute(
+            "SELECT evento_id, momento, lugar_id, personaje_id "
+            "FROM evento_cronologia ORDER BY momento, evento_id, personaje_id"
+        ).fetchall()
+
+        agrupado: dict[str, list[str]] = {}
+        datos: dict[str, tuple[int, str | None]] = {}
+        for fila in filas:
+            datos[fila["evento_id"]] = (fila["momento"], fila["lugar_id"])
+            if fila["personaje_id"]:
+                agrupado.setdefault(fila["evento_id"], []).append(fila["personaje_id"])
+
+        return tuple(
+            EventoDeCronologia(
+                evento_id=evento_id,
+                momento=momento,
+                lugar_id=lugar_id,
+                personajes=tuple(agrupado.get(evento_id, ())),
+            )
+            for evento_id, (momento, lugar_id) in datos.items()
+        )
+
+
+@dataclass(frozen=True)
+class UsoDeHechos:
+    """Que capitulos usan cada hecho, y al reves.
+
+    Es la precondicion de la regeneracion selectiva (RF-LEC-05): sin esto, cambiar un
+    hecho obliga a reescribir la novela entera. El registro es **declarado**, no deducido:
+    un hecho puede estar vigente sin que ningun capitulo lo narre, y darlo por usado seria
+    regenerar de mas.
+
+    Cubre RF-BIB-01.
+    """
+
+    conn: sqlite3.Connection
+
+    def registrar(self, hecho_id: str, capitulo_id: str) -> None:
+        """Anota el uso. Idempotente: canonizar dos veces no duplica la fila."""
+        self.conn.execute(
+            "INSERT OR IGNORE INTO hecho_capitulo (hecho_id, capitulo_id, registrado_en) "
+            "VALUES (?, ?, datetime('now'))",
+            (hecho_id, capitulo_id),
+        )
+
+    def capitulos_de(self, hecho_id: str) -> tuple[str, ...]:
+        """Los capitulos que hay que regenerar si ese hecho cambia."""
+        filas = self.conn.execute(
+            "SELECT capitulo_id FROM hecho_capitulo WHERE hecho_id = ? ORDER BY capitulo_id",
+            (hecho_id,),
+        ).fetchall()
+        return tuple(fila["capitulo_id"] for fila in filas)
+
+    def hechos_de(self, capitulo_id: str) -> tuple[str, ...]:
+        filas = self.conn.execute(
+            "SELECT hecho_id FROM hecho_capitulo WHERE capitulo_id = ? ORDER BY hecho_id",
+            (capitulo_id,),
+        ).fetchall()
+        return tuple(fila["hecho_id"] for fila in filas)
+
+
+@dataclass(frozen=True)
+class ResumenDeCapitulo:
+    """Lo que un capitulo deja para los que vienen detras."""
+
+    capitulo_id: str
+    texto: str
+    tokens: int
+    revision_canon: int
+
+
+@dataclass(frozen=True)
+class ResumenesDeCapitulo:
+    """Resumen por capitulo, que es lo que alimenta el contexto de los siguientes.
+
+    Es lo que mantiene el paquete de tamano constante en el capitulo 40: si el capitulo 3
+    entrara con su prosa, el paquete creceria con el libro (`architecture.md` 4.4). Un
+    capitulo tiene **un** resumen, no un historial: regenerarlo lo sustituye, porque dos
+    resumenes del mismo capitulo son dos versiones de lo que paso y nadie sabria cual vale.
+
+    Cubre RF-BIB-03.
+    """
+
+    conn: sqlite3.Connection
+
+    def guardar(self, capitulo_id: str, texto: str, *, revision_canon: int) -> None:
+        from backend.context.presupuesto import contar_tokens
+
+        self.conn.execute(
+            "INSERT INTO resumen_capitulo (capitulo_id, texto, tokens, revision_canon) "
+            "VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(capitulo_id) DO UPDATE SET "
+            "texto = excluded.texto, tokens = excluded.tokens, "
+            "revision_canon = excluded.revision_canon",
+            (capitulo_id, texto, contar_tokens(texto), revision_canon),
+        )
+
+    def anteriores_a(self, capitulo_id: str) -> tuple[ResumenDeCapitulo, ...]:
+        """Los resumenes de los capitulos que van antes que este, en orden de lectura."""
+        filas = self.conn.execute(
+            """
+            SELECT r.capitulo_id, r.texto, r.tokens, r.revision_canon
+            FROM resumen_capitulo r
+            JOIN capitulo c ON c.id = r.capitulo_id
+            WHERE c.volumen_id = (SELECT volumen_id FROM capitulo WHERE id = ?)
+              AND c.orden < (SELECT orden FROM capitulo WHERE id = ?)
+            ORDER BY c.orden
+            """,
+            (capitulo_id, capitulo_id),
+        ).fetchall()
+        return tuple(
+            ResumenDeCapitulo(
+                capitulo_id=fila["capitulo_id"],
+                texto=fila["texto"],
+                tokens=fila["tokens"],
+                revision_canon=fila["revision_canon"],
+            )
+            for fila in filas
+        )
+
+
+@dataclass(frozen=True)
+class CheckpointDeCapitulos:
+    """Por donde iba la generacion cuando se cayo.
+
+    Los dos fallos que este repositorio existe para evitar son simetricos: reanudar
+    rehaciendo el ultimo capitulo paga dos veces la invocacion, y reanudar saltandoselo
+    deja un hueco que nadie ve hasta leer la novela entera. Por eso marcar es idempotente
+    y `siguiente` se calcula del orden declarado, no de un contador propio.
+
+    Cubre RF-BIB-04.
+    """
+
+    conn: sqlite3.Connection
+
+    def marcar_completado(
+        self, capitulo_id: str, *, orden: int, borrador_id: str | None = None
+    ) -> None:
+        self.conn.execute(
+            "INSERT INTO checkpoint_capitulo (capitulo_id, orden, completado_en, borrador_id) "
+            "VALUES (?, ?, datetime('now'), ?) "
+            "ON CONFLICT(capitulo_id) DO NOTHING",
+            (capitulo_id, orden, borrador_id),
+        )
+
+    def completados(self) -> tuple[str, ...]:
+        filas = self.conn.execute(
+            "SELECT capitulo_id FROM checkpoint_capitulo ORDER BY orden"
+        ).fetchall()
+        return tuple(fila["capitulo_id"] for fila in filas)
+
+    def siguiente(self, plan: tuple[str, ...]) -> str | None:
+        """El primer capitulo del plan que aun no esta completado, o `None` si no queda.
+
+        Se le pasa el plan entero en lugar de deducirlo: el orden de los capitulos lo
+        decide la planificacion, y un repositorio que lo adivinara empezaria a opinar
+        sobre el plan.
+        """
+        hechos = set(self.completados())
+        for capitulo_id in plan:
+            if capitulo_id not in hechos:
+                return capitulo_id
+        return None

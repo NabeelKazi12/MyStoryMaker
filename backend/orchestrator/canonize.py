@@ -20,7 +20,11 @@ from backend.domain.diegetic.canon import Hecho
 from backend.domain.production.ejecucion import Defecto
 from backend.domain.vocabularies import Severidad
 from backend.store.database import Conexion
-from backend.store.repositories import CanonVersionado, CatalogoDePredicados
+from backend.store.repositories import (
+    CanonVersionado,
+    CatalogoDePredicados,
+    UsoDeHechos,
+)
 
 
 class Resolucion(Enum):
@@ -66,6 +70,7 @@ class Canonizador:
         orden_de_evento: dict[str, int],
         *,
         escena_id: str | None = None,
+        capitulo_id: str | None = None,
     ) -> ResultadoDeCanonizacion:
         """Contrasta cada hecho declarado contra el canon vigente y actua.
 
@@ -118,6 +123,13 @@ class Canonizador:
             for hecho in hechos_nuevos:
                 if hecho.id in promovidos:
                     canon.registrar_insercion(revision, hecho)
+
+        if capitulo_id is not None and promovidos:
+            # RF-BIB-01: solo lo que de verdad entro al canon por este capitulo. Anotar
+            # tambien los duplicados ensancharia la regeneracion selectiva de RF-LEC-05.
+            usos = UsoDeHechos(self.conn)
+            for identificador in promovidos:
+                usos.registrar(identificador, capitulo_id)
 
         invalidadas = self._invalidar_en_cascada(revision, escena_id) if escena_id else ()
 

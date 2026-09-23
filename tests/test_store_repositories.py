@@ -16,7 +16,15 @@ import pytest
 from backend.domain.diegetic.canon import Hecho
 from backend.domain.errors import ErrorDeDominio
 from backend.store import database
-from backend.store.repositories import CanonVersionado, CatalogoDePredicados, GrafoCausal
+from backend.store.repositories import (
+    CanonVersionado,
+    CatalogoDePredicados,
+    CheckpointDeCapitulos,
+    GrafoCausal,
+    ResumenesDeCapitulo,
+    StoryBible,
+    UsoDeHechos,
+)
 
 RAIZ = Path(__file__).resolve().parent.parent
 
@@ -163,3 +171,144 @@ def test_la_revision_solo_avanza(conn: sqlite3.Connection) -> None:
 
     assert (primera, segunda) == (1, 2)
     assert canon.revision_actual() == 2
+
+
+# --- SPEC-003 A-04 y A-05: la story bible consultable y el uso por capitulo ----------
+
+
+def _canon_minimo(conn: sqlite3.Connection) -> None:
+    """Un brief, un volumen, dos capitulos, un personaje, un lugar, un evento y un hecho."""
+    conn.executescript(
+        """
+        INSERT INTO brief (id, genero, premisa, promesa_al_lector, extension_objetivo)
+            VALUES ('br-1', 'memoria', 'una vida', 'emocionar', 30000);
+        INSERT INTO volumen (id, titulo) VALUES ('vo-1', 'Marta');
+        INSERT INTO capitulo (id, volumen_id, orden) VALUES ('ca-1', 'vo-1', 1);
+        INSERT INTO capitulo (id, volumen_id, orden) VALUES ('ca-2', 'vo-1', 2);
+        INSERT INTO lugar (id, nombre_canonico) VALUES ('lu-1', 'Gijon');
+        INSERT INTO personaje (id, nombre_canonico, anio_de_nacimiento)
+            VALUES ('pe-1', 'Marta', 1990);
+        INSERT INTO evento (id, descripcion, posicion_en_historia, tipo, momento, lugar_id)
+            VALUES ('ev-1', 'aprende a nadar', 10, 'accion', 1998, 'lu-1');
+        INSERT INTO evento_participante (evento_id, entidad_id, rol_en_evento)
+            VALUES ('ev-1', 'pe-1', 'agente');
+        INSERT INTO hecho (id, sujeto_id, predicado, objeto, valido_desde)
+            VALUES ('he-1', 'pe-1', 'ubicacion', 'Gijon', 'ev-1');
+        """
+    )
+    conn.commit()
+
+
+@pytest.mark.invariants
+def test_la_story_bible_se_consulta_por_personaje_lugar_hecho_y_cronologia(
+    conn: sqlite3.Connection,
+) -> None:
+    """RF-BIB-05. Es lo que la ficha de la lectura y el generador de Lean van a leer."""
+    _canon_minimo(conn)
+    biblia = StoryBible(conn)
+
+    assert [p.nombre_canonico for p in biblia.personajes()] == ["Marta"]
+    assert [lugar.nombre_canonico for lugar in biblia.lugares()] == ["Gijon"]
+    assert [h.id for h in biblia.hechos()] == ["he-1"]
+
+    (fila,) = biblia.cronologia()
+    assert fila.evento_id == "ev-1"
+    assert fila.momento == 1998
+    assert fila.lugar_id == "lu-1"
+    assert fila.personajes == ("pe-1",)
+
+
+@pytest.mark.invariants
+def test_un_hecho_usado_en_dos_capitulos_los_lista_ambos(conn: sqlite3.Connection) -> None:
+    """RF-BIB-01, y la precondicion de la regeneracion selectiva de RF-LEC-05."""
+    _canon_minimo(conn)
+    usos = UsoDeHechos(conn)
+
+    usos.registrar("he-1", "ca-1")
+    usos.registrar("he-1", "ca-2")
+    usos.registrar("he-1", "ca-1")  # idempotente: registrar dos veces no duplica
+
+    assert usos.capitulos_de("he-1") == ("ca-1", "ca-2")
+    assert usos.hechos_de("ca-2") == ("he-1",)
+
+
+@pytest.mark.invariants
+def test_un_hecho_sin_uso_declarado_no_arrastra_ningun_capitulo(
+    conn: sqlite3.Connection,
+) -> None:
+    """Un hecho vigente que ninguna escena narra existe: es F-09 de verification.md 11.
+
+    Devolver capitulos que no lo usan haria que cambiarlo regenerase de mas, que es lo
+    contrario de lo que RF-LEC-05 pide.
+    """
+    _canon_minimo(conn)
+    assert UsoDeHechos(conn).capitulos_de("he-1") == ()
+
+
+# --- SPEC-003 A-06 y A-07: resumenes por capitulo y checkpoint ----------------------
+
+
+@pytest.mark.invariants
+def test_el_contexto_del_capitulo_n_trae_resumenes_y_no_prosa_literal(
+    conn: sqlite3.Connection,
+) -> None:
+    """RF-BIB-03. Es lo que mantiene el paquete de tamano constante en el capitulo 40.
+
+    Si el capitulo 3 entrara con su prosa, el paquete crecería con el libro y la
+    reproducibilidad del `hash` dejaria de significar nada (`architecture.md` 4.4).
+    """
+    _canon_minimo(conn)
+    resumenes = ResumenesDeCapitulo(conn)
+    resumenes.guardar("ca-1", "Marta aprende a nadar y pierde el miedo.", revision_canon=1)
+
+    anteriores = resumenes.anteriores_a("ca-2")
+
+    assert [r.capitulo_id for r in anteriores] == ["ca-1"]
+    assert anteriores[0].texto.startswith("Marta aprende")
+    assert anteriores[0].tokens > 0
+    # El capitulo propio no entra en su propio contexto.
+    assert resumenes.anteriores_a("ca-1") == ()
+
+
+@pytest.mark.invariants
+def test_guardar_dos_veces_el_resumen_de_un_capitulo_lo_sustituye(
+    conn: sqlite3.Connection,
+) -> None:
+    """Un capitulo regenerado tiene un resumen nuevo, no dos resumenes contradictorios."""
+    _canon_minimo(conn)
+    resumenes = ResumenesDeCapitulo(conn)
+    resumenes.guardar("ca-1", "primera version", revision_canon=1)
+    resumenes.guardar("ca-1", "segunda version", revision_canon=2)
+
+    (unico,) = resumenes.anteriores_a("ca-2")
+    assert unico.texto == "segunda version"
+    assert unico.revision_canon == 2
+
+
+@pytest.mark.invariants
+def test_reanudar_desde_checkpoint_no_duplica_ni_pierde_capitulos(
+    conn: sqlite3.Connection,
+) -> None:
+    """RF-BIB-04, y el invariante de seguridad que TLA+ verificara en F-05.
+
+    Los dos fallos que importan son simetricos: reanudar rehaciendo el ultimo capitulo
+    duplica trabajo y paga dos veces la invocacion; reanudar saltandoselo deja un hueco
+    que nadie nota hasta leer la novela entera.
+    """
+    _canon_minimo(conn)
+    checkpoint = CheckpointDeCapitulos(conn)
+
+    assert checkpoint.completados() == ()
+    assert checkpoint.siguiente(("ca-1", "ca-2")) == "ca-1"
+
+    checkpoint.marcar_completado("ca-1", orden=1)
+
+    assert checkpoint.completados() == ("ca-1",)
+    assert checkpoint.siguiente(("ca-1", "ca-2")) == "ca-2"
+
+    # Marcarlo dos veces no lo duplica ni retrocede: la reanudacion es idempotente.
+    checkpoint.marcar_completado("ca-1", orden=1)
+    assert checkpoint.completados() == ("ca-1",)
+
+    checkpoint.marcar_completado("ca-2", orden=2)
+    assert checkpoint.siguiente(("ca-1", "ca-2")) is None

@@ -7,7 +7,11 @@ from __future__ import annotations
 
 import pytest
 
-from backend.context.ensamblado import Ensamblador, bloqueada_por_presupuesto
+from backend.context.ensamblado import (
+    Ensamblador,
+    bloque_de_arco,
+    bloqueada_por_presupuesto,
+)
 from backend.context.filtros import (
     AlcanceDeRelevancia,
     FiltroEpistemico,
@@ -319,3 +323,32 @@ def test_ninguna_invocacion_de_redaccion_puede_agotar_el_techo_del_sistema() -> 
     assert reserva_maxima <= TECHO_DEL_SISTEMA
     # El caso normal de `architecture.md` 4.2: tres redacciones y un juicio en vuelo.
     assert 3 * reserva_maxima + 9_000 <= TECHO_DEL_SISTEMA
+
+
+# --- SPEC-003 A-06: los resumenes entran al paquete, la prosa no ---------------------
+
+
+@pytest.mark.invariants
+def test_el_arco_se_compone_de_resumenes_y_nunca_de_prosa_literal() -> None:
+    """RF-BIB-03. El componente de arco es la piramide, y la piramide son resumenes.
+
+    Que el bloque se construya aqui y no en cada llamador es lo que impide que alguien
+    «solo por esta vez» meta el texto del capitulo anterior: el paquete dejaria de medir
+    lo mismo en el capitulo 3 y en el 40.
+    """
+    bloque = bloque_de_arco(
+        (
+            ("ca-1", "Marta aprende a nadar."),
+            ("ca-2", "Marta vuelve al pueblo y discute con su hermana."),
+        )
+    )
+
+    assert "ca-1" in bloque
+    assert "Marta aprende a nadar." in bloque
+    assert bloque.index("ca-1") < bloque.index("ca-2"), "el orden de lectura se conserva"
+
+
+@pytest.mark.invariants
+def test_sin_capitulos_anteriores_el_arco_queda_vacio_y_no_ocupa_presupuesto() -> None:
+    """El primer capitulo no tiene arco. Un encabezado vacio gastaria tokens por nada."""
+    assert bloque_de_arco(()) == ""

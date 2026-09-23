@@ -352,7 +352,7 @@ respuesta porque el apartado 2 y el apartado 3 se apoyan en ellas.
 
 | | |
 | --- | --- |
-| **Estado** | `borrador`. La puerta *Plan aprobado* de `AGENTS.md` §10.5 no está superada: hasta su firma no se escribe código |
+| **Estado** | `aprobado` el 2026-09-23 por @Nabeel, sobre esta spec `aprobada` la misma fecha. Las dos puertas de `AGENTS.md` §10.5 previas al código quedan superadas: a partir de aquí se escribe código, paso a paso y empezando por el test en rojo |
 | **Spec de la que cuelga** | Esta misma, `aprobada` el 2026-09-23 por @Nabeel |
 | **Ubicación** | En el apartado final de la spec, como manda `AGENTS.md` §10.3, para que el qué y el cómo no puedan divergir en dos documentos |
 
@@ -395,6 +395,18 @@ migración tardía obliga a rehacer lo construido encima.
 
 **Marcha atrás.** Si `0002` resulta más grande de lo que cabe en una revisión, se parte por
 tabla, nunca por mitad de tabla: media migración aplicada es peor que ninguna.
+
+**Estado: construida el 2026-09-23.** Los ocho pasos cerrados, 246 tests en verde,
+`ruff`, `ruff format` y `mypy backend/` limpios. Tres desviaciones, cada una con su motivo:
+
+| # | Desviación | Motivo |
+| --- | --- | --- |
+| 1 | La cronología de RF-BIB-02 es una **vista** (`evento_cronologia`), no una tabla | Una copia obliga a sincronizarla con el canon, y al desincronizarse haría que Lean verificara una historia distinta de la que se lee. Registrado como `rd-d19`, y `test_la_cronologia_es_una_vista_y_no_una_copia` impide que alguien la convierta en tabla sin enterarse |
+| 2 | `hecho_capitulo.hecho_id` **no** tiene clave foránea a `hecho` | Se descubrió al ejecutar el test: un hecho entra al canon como evento de cambio en `canon_cambio`, no como fila de `hecho` (RF-STO-05), así que la clave foránea habría hecho fallar toda canonización. El plan daba por hecho lo contrario |
+| 3 | `EventoDeCronologia` es una proyección del dominio, no una clase persistida | Misma razón que 1, un escalón más arriba: `cronologia_de` deriva las filas de los eventos, y los eventos sin `momento` quedan fuera con `sin_momento` en lugar de recibir una fecha inventada |
+
+Dos decisiones registradas en la migración: `rd-d18` (el destinatario es una clase del
+dominio, no campos sueltos en `Brief`) y `rd-d19` (la cronología es una vista).
 
 ### 10.3 Fase B · Guardarraíles y validadores programáticos
 

@@ -34,7 +34,7 @@ from backend.orchestrator.estados import (
     transicionar,
 )
 from backend.orchestrator.plan import DAG, PlanCiclico, cadena_de_escena, reconciliar
-from backend.store.repositories import CanonVersionado
+from backend.store.repositories import CanonVersionado, UsoDeHechos
 from tests.conftest import material_minimo
 
 ORDEN = {"ev-1": 10, "ev-2": 20, "ev-3": 30}
@@ -374,3 +374,48 @@ def test_la_cascada_es_parte_del_cierre(conn: sqlite3.Connection) -> None:
         "bo-1", [_hecho("h-1", "el puerto", "ev-1")], [], ORDEN, escena_id="esc-1"
     )
     assert resultado.unidades_invalidadas == ("pq-1",)
+
+
+# --- SPEC-003 A-05: canonizar anota en que capitulo se usa cada hecho ----------------
+
+
+@pytest.mark.invariants
+def test_canonizar_registra_el_uso_del_hecho_en_su_capitulo(conn: sqlite3.Connection) -> None:
+    """RF-BIB-01. Sin esto, cambiar un hecho obliga a regenerar la novela entera.
+
+    El capitulo no se deduce del hecho: se lo da quien canoniza, porque es quien sabe en
+    que escena se acepto el borrador. Deducirlo del canon devolveria capitulos que no lo
+    narran (F-09 de `verification.md` 11) y la regeneracion tocaria de mas.
+    """
+    material_minimo(conn)
+    resultado = Canonizador(conn).canonizar(
+        "bo-1", [_hecho("h-1", "el puerto", "ev-1")], [], ORDEN, capitulo_id="cap-1"
+    )
+
+    assert resultado.promovidos == ("h-1",)
+    assert UsoDeHechos(conn).capitulos_de("h-1") == ("cap-1",)
+
+
+@pytest.mark.invariants
+def test_un_hecho_que_no_se_promueve_no_registra_uso(conn: sqlite3.Connection) -> None:
+    """Un duplicado no aporta nada al capitulo: anotarlo ensancharia la regeneracion."""
+    material_minimo(conn)
+    vigente = _hecho("h-1", "el puerto", "ev-1")
+    Canonizador(conn).canonizar("bo-1", [vigente], [vigente], ORDEN, capitulo_id="cap-1")
+
+    assert UsoDeHechos(conn).capitulos_de("h-1") == ()
+
+
+@pytest.mark.invariants
+def test_canonizar_sin_capitulo_sigue_funcionando_y_no_registra_nada(
+    conn: sqlite3.Connection,
+) -> None:
+    """La canonizacion de SPEC-001 no se rompe: el capitulo es opcional y su ausencia
+    significa «no se de que capitulo viene», no «viene de todos»."""
+    material_minimo(conn)
+    resultado = Canonizador(conn).canonizar(
+        "bo-1", [_hecho("h-1", "el puerto", "ev-1")], [], ORDEN
+    )
+
+    assert resultado.promovidos == ("h-1",)
+    assert UsoDeHechos(conn).capitulos_de("h-1") == ()

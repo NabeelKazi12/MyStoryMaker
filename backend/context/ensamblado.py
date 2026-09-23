@@ -120,3 +120,21 @@ def bloqueada_por_presupuesto(error: PresupuestoExcedido) -> tuple[str, ...]:
         "apretar el filtro estructural de AlcanceDeRelevancia",
         "no subir el presupuesto: esconderia que el filtro esta mal acotado",
     )
+
+
+def bloque_de_arco(resumenes: Sequence[tuple[str, str]]) -> str:
+    """Compone el componente de arco con los resumenes de los capitulos previos.
+
+    Recibe pares `(capitulo_id, texto)` y no objetos del store porque `context/` no
+    habla con la base de datos: el acceso a datos pasa por `store/` (`CLAUDE.md` 4).
+    Quien llama lee con `ResumenesDeCapitulo.anteriores_a` y pasa aqui lo leido.
+
+    Que la composicion viva en un solo sitio es lo que impide que alguien meta la
+    prosa del capitulo anterior una sola vez: el paquete dejaria de medir lo mismo en
+    el capitulo 3 y en el 40, que es la propiedad que hace comparable el `hash`.
+
+    Cubre RF-BIB-03.
+    """
+    if not resumenes:
+        return ""
+    return "\n".join(f"[{capitulo_id}] {texto.strip()}" for capitulo_id, texto in resumenes)

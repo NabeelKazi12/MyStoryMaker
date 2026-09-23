@@ -13,6 +13,7 @@ Cubre RF-DOM-01 en su parte diegetica, RF-DOM-06 y RF-DOM-07.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from backend.domain.errors import exigir
@@ -61,6 +62,7 @@ class Personaje(Entidad):
     necesidad_interna: str = ""
     creencia_falsa: str = ""
     arco_tipo: TipoDeArco | None = None
+    anio_de_nacimiento: int | None = None
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -73,6 +75,18 @@ class Personaje(Entidad):
             "todo personaje protagonico tiene necesidad_interna no vacia",
             f"id={self.id!r}",
         )
+
+    def edad_en(self, momento: int) -> int | None:
+        """Edad en un momento de la historia, o `None` si no se declaro nacimiento.
+
+        Se deriva y no se guarda: una edad almacenada miente en cuanto el evento cambia
+        de momento. Tampoco se corrige si sale negativa, porque una edad negativa **es**
+        la incoherencia que el validador formal tiene que encontrar; taparla aqui dejaria
+        a Lean sin nada que detectar (RF-LEAN-02).
+        """
+        if self.anio_de_nacimiento is None:
+            return None
+        return momento - self.anio_de_nacimiento
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -103,6 +117,7 @@ class EventoNarrativo:
     posicion_en_historia: int
     tipo: TipoDeEvento
     visibilidad: VisibilidadDeEvento = VisibilidadDeEvento.PUBLICO
+    momento: int | None = None
     lugar_id: str | None = None
     participantes: tuple[Participacion, ...] = ()
     causa: tuple[str, ...] = ()
@@ -193,3 +208,56 @@ class LineaTemporal:
 
     id: str
     eventos_ordenados: tuple[str, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True, kw_only=True)
+class EventoDeCronologia:
+    """Una fila de la cronologia: evento, momento, lugar y quien estaba.
+
+    Es una **proyeccion** del canon, no una segunda copia. Se construye con
+    `cronologia_de` y nadie la persiste aparte: una cronologia declarada a mano diverge
+    del canon en cuanto alguien edita un evento, y entonces el validador formal estaria
+    verificando una historia que ya no es la que se lee.
+
+    Cubre RF-BIB-02 y es la entrada de RF-LEAN-01.
+    """
+
+    evento_id: str
+    momento: int | None
+    lugar_id: str | None = None
+    personajes: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        clase = type(self).__name__
+        exigir(
+            self.momento is not None,
+            clase,
+            "toda fila de la cronologia tiene momento",
+            f"evento_id={self.evento_id!r}; sin momento no se puede ordenar ni fechar, "
+            f"y los dos invariantes de RF-LEAN-02 comparan momentos",
+        )
+
+
+def cronologia_de(eventos: Iterable[EventoNarrativo]) -> tuple[EventoDeCronologia, ...]:
+    """Proyecta los eventos fechados como cronologia, ordenados por momento.
+
+    Los eventos sin momento **se quedan fuera** en lugar de recibir uno inventado. Lo que
+    falta se cuenta con `sin_momento`, que es lo que permite decir «la cronologia cubre 18
+    de 20 eventos» en vez de dar por completa una historia a medio fechar.
+    """
+    filas = [
+        EventoDeCronologia(
+            evento_id=evento.id,
+            momento=evento.momento,
+            lugar_id=evento.lugar_id,
+            personajes=tuple(p.entidad_id for p in evento.participantes),
+        )
+        for evento in eventos
+        if evento.momento is not None
+    ]
+    return tuple(sorted(filas, key=lambda f: (f.momento or 0, f.evento_id)))
+
+
+def sin_momento(eventos: Iterable[EventoNarrativo]) -> tuple[str, ...]:
+    """Los eventos que no entran en la cronologia, para poder declarar el hueco."""
+    return tuple(evento.id for evento in eventos if evento.momento is None)
