@@ -83,6 +83,24 @@ INTOCABLES: frozenset[Componente] = frozenset(
 )
 
 
+class PresupuestoFueraDeRango(ValueError):
+    """Se ha pedido un paquete mayor que el maximo de entrada de RF-CTX-08.
+
+    No es el caso de `PresupuestoExcedido`, que ocurre con contenido real y se resuelve
+    apretando filtros: este es quien llama pidiendo mas sitio del que el sistema tiene.
+    Sin esta comprobacion, los 25.000 serian el valor por defecto de un parametro y el
+    techo de 100.000 dejaria de ser un techo sin que nadie lo hubiera derogado (D-13).
+    """
+
+    def __init__(self, presupuesto: int) -> None:
+        self.presupuesto = presupuesto
+        super().__init__(
+            f"Presupuesto de {presupuesto} tokens sobre un maximo de entrada de "
+            f"{MAXIMO_DE_ENTRADA}, con el techo del sistema en {TECHO_DEL_SISTEMA}. "
+            f"Apretar los filtros, no pedir mas sitio."
+        )
+
+
 class PresupuestoExcedido(Exception):
     """El paquete no cabe ni despues de recortar todo lo recortable.
 

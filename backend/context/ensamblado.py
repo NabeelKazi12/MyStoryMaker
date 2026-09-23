@@ -20,10 +20,12 @@ from dataclasses import dataclass, field
 
 from backend.context.presupuesto import (
     INTOCABLES,
+    MAXIMO_DE_ENTRADA,
     PRESUPUESTO_DE_REDACCION,
     Bloque,
     Componente,
     PresupuestoExcedido,
+    PresupuestoFueraDeRango,
     recortar,
 )
 from backend.domain.production.ejecucion import Defecto, PaqueteDeContexto
@@ -42,6 +44,11 @@ class Ensamblador:
     version_de_prompt: str
     presupuesto: int = PRESUPUESTO_DE_REDACCION
     _bloques: dict[Componente, Bloque] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """RF-CTX-08: el maximo de entrada es un limite, no una sugerencia."""
+        if self.presupuesto > MAXIMO_DE_ENTRADA or self.presupuesto <= 0:
+            raise PresupuestoFueraDeRango(self.presupuesto)
 
     def poner(self, componente: Componente, contenido: str) -> Ensamblador:
         """Coloca un componente. El orden de llamada da igual: manda el del contrato."""

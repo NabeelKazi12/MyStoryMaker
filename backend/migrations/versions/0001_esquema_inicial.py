@@ -46,10 +46,20 @@ DECISIONES_REGISTRADAS = (
     ),
     (
         "rd-r1",
-        "El Redactor usa claude-opus-5 con pensamiento adaptativo y effort high",
+        "Sustituida por rd-d17. Decia: el Redactor usa claude-opus-5 con pensamiento "
+        "adaptativo y effort high",
         "claude-sonnet-5 para ahorrar unos 9 dolares por novela",
-        "Una llamada cuesta unos 0,21 dolares y una novela unos 15: el coste no domina y la "
-        "prosa es el producto",
+        "Una llamada costaba unos 0,21 dolares y una novela unos 15: el coste no dominaba y "
+        "la prosa es el producto. Se conserva porque rd-d17 la cita",
+        "worker, agents",
+    ),
+    (
+        "rd-d17",
+        "Los roles que escriben prosa usan claude-haiku-4-5, sin pensamiento extendido y "
+        "sin effort",
+        "claude-opus-5, que registraba rd-r1",
+        "Cinco veces el precio por token para un producto cuyo coste ya no dominaba, y que "
+        "ademas ocultaba que la calidad de prosa nunca se habia medido contra la rubrica",
         "worker, agents",
     ),
     (

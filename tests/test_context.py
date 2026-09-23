@@ -16,9 +16,13 @@ from backend.context.filtros import (
 )
 from backend.context.presupuesto import (
     INTOCABLES,
+    MAXIMO_DE_ENTRADA,
     ORDEN_DE_RECORTE,
+    TECHO_DE_SALIDA_REDACCION,
+    TECHO_DEL_SISTEMA,
     Componente,
     PresupuestoExcedido,
+    PresupuestoFueraDeRango,
     contar_tokens,
 )
 from backend.domain.diegetic.canon import Hecho
@@ -285,3 +289,33 @@ def test_el_paquete_no_crece_con_la_longitud_del_libro() -> None:
     escena_3, _ = _completo(_ensamblador(), tamano=30).ensamblar("tar-3", "pq-3")
     escena_40, _ = _completo(_ensamblador(), tamano=30).ensamblar("tar-40", "pq-40")
     assert escena_3.tokens_totales == escena_40.tokens_totales
+
+
+# --- RF-CTX-08: el techo de 100.000 es un limite, no un valor por defecto -------------
+
+
+@pytest.mark.invariants
+def test_un_presupuesto_por_encima_del_maximo_de_entrada_no_se_acepta() -> None:
+    """RF-CTX-08. Sin esto, el tope de 25.000 es el valor por defecto de un parametro.
+
+    Quien llama podria pedir un paquete de 500.000 y el ensamblador lo serviria: el techo
+    del sistema dejaria de ser un techo sin que nadie lo hubiera derogado.
+    """
+    with pytest.raises(PresupuestoFueraDeRango) as error:
+        Ensamblador(
+            revision_canon=3,
+            version_de_prompt="1.0.0",
+            presupuesto=MAXIMO_DE_ENTRADA + 1,
+        )
+
+    assert str(MAXIMO_DE_ENTRADA) in str(error.value)
+
+
+@pytest.mark.invariants
+def test_ninguna_invocacion_de_redaccion_puede_agotar_el_techo_del_sistema() -> None:
+    """Entrada maxima mas techo de salida tiene que caber, y con sitio para otra tarea."""
+    reserva_maxima = MAXIMO_DE_ENTRADA + TECHO_DE_SALIDA_REDACCION
+
+    assert reserva_maxima <= TECHO_DEL_SISTEMA
+    # El caso normal de `architecture.md` 4.2: tres redacciones y un juicio en vuelo.
+    assert 3 * reserva_maxima + 9_000 <= TECHO_DEL_SISTEMA

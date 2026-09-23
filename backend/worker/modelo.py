@@ -7,7 +7,8 @@ La invocacion esta detras de un protocolo a proposito. No es una abstraccion gra
 sin ella el bucle de E7 no se podria ejecutar ni probar sin credenciales, y el sistema
 solo se sabria roto la primera vez que alguien pagara por descubrirlo.
 
-Cubre RF-WRK-01 a RF-WRK-05 y RF-WRK-09.
+Cubre RF-WRK-01 a RF-WRK-05 y RF-WRK-09, este ultimo con el modelo que fija D-17
+(`architecture.md` 5.1) en lugar del que decia R-1.
 """
 
 from __future__ import annotations
@@ -18,17 +19,22 @@ from typing import Protocol
 from backend.context.presupuesto import TECHO_DE_SALIDA_REDACCION
 from backend.domain.vocabularies import ClaseDeFallo
 
-# R-1. El identificador sale de una tabla de referencia que este entorno no ha podido
-# contrastar contra la API de modelos: hay que confirmarlo antes de invocar de verdad.
-MODELO_DEL_REDACTOR = "claude-opus-5"
+# D-17 (`architecture.md` 5.1), que sustituye a R-1. El identificador sale de una tabla de
+# referencia que este entorno no ha podido contrastar contra la API de modelos: hay que
+# confirmarlo antes de invocar de verdad.
+MODELO_DEL_REDACTOR = "claude-haiku-4-5"
 
 # El techo de salida es el de `architecture.md` 4.2, no uno mayor: con 8.000 la reserva
 # subiria a 32.000 y tres escenas concurrentes mas un juicio pasarian de 100.000.
 MAX_TOKENS_REDACCION = TECHO_DE_SALIDA_REDACCION
 
-# Opus 5 corre pensamiento adaptativo por defecto y rechaza `budget_tokens` con un 400.
-PENSAMIENTO = "adaptive"
-ESFUERZO = "high"
+# Sin pensamiento extendido: este modelo solo admite presupuesto fijo, y ese presupuesto
+# sale del mismo techo de 4.000 que la prosa. Pensar recortaria la escena hasta truncarla,
+# y una salida truncada es fallo de contrato (`architecture.md` 6.5). Activarlo exige subir
+# el techo y recalibrar 4.2, o sea una spec.
+PENSAMIENTO = None
+# Sin `effort`: el modelo lo rechaza.
+ESFUERZO = None
 
 
 class FalloDeInvocacion(Exception):
@@ -116,6 +122,6 @@ def construir_cliente_real() -> ClienteDeModelo:
     """
     raise NotImplementedError(
         "Cliente real no cableado. Antes de habilitarlo hay que confirmar el modelo de "
-        "R-1 contra la API de modelos, que este entorno no puede consultar: es la "
+        "D-17 contra la API de modelos, que este entorno no puede consultar: es la "
         "salvedad declarada en SPEC-001 9.2 y la marcha atras de E2 en el plan."
     )

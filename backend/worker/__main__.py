@@ -1,7 +1,7 @@
 """Punto de entrada del worker: `uv run python -m backend.worker`.
 
 Consume la cola de `Tarea` e invoca modelos. No arranca sin un cliente real, y el cliente
-real no existe hasta confirmar el modelo de R-1 contra la API de modelos.
+real no existe hasta confirmar el modelo de D-17 contra la API de modelos.
 """
 
 from __future__ import annotations

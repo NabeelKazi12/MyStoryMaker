@@ -21,7 +21,7 @@ from backend.agents.redactor.redactor import (
     prompt_vigente,
 )
 from backend.context.ensamblado import Ensamblador
-from backend.context.presupuesto import Componente
+from backend.context.presupuesto import MAXIMO_DE_ENTRADA, Componente
 from backend.domain.diegetic.canon import Hecho
 from backend.domain.production.ejecucion import Tarea
 from backend.domain.vocabularies import ClaseDeFallo, EstadoDeTarea
@@ -166,6 +166,25 @@ def test_ningun_registro_de_ejecucion_contiene_prosa() -> None:
 
 
 @pytest.mark.invariants
+def test_un_prompt_por_encima_del_maximo_de_entrada_no_se_llega_a_enviar() -> None:
+    """RF-CTX-08 en el ultimo punto donde todavia se puede respetar.
+
+    Enviarlo y dejar que el proveedor lo rechace cuesta la llamada y, si el proveedor la
+    acepta, rompe el techo del sistema sin que nadie se entere. Se para antes, y se
+    clasifica como presupuesto: un paquete que no cabe no es un fallo de contenido y no
+    debe consumir intentos narrativos.
+    """
+    cliente = ClienteFalso(respuestas=[_respuesta(RESPUESTA_BUENA)])
+    prompt = "palabra " * (MAXIMO_DE_ENTRADA * 2)
+
+    informe = Worker(cliente=cliente).ejecutar("tar-1", "pq-1", prompt)
+
+    assert informe.clase_de_fallo is ClaseDeFallo.PRESUPUESTO
+    assert cliente.invocaciones == []
+    assert str(MAXIMO_DE_ENTRADA) in informe.detalle_del_fallo
+
+
+@pytest.mark.invariants
 def test_una_salida_truncada_al_techo_es_fallo_de_contrato() -> None:
     """Alcanzar max_tokens no es una invitacion a ampliar el techo."""
     larga = Respuesta(
@@ -180,10 +199,10 @@ def test_una_salida_truncada_al_techo_es_fallo_de_contrato() -> None:
 
 @pytest.mark.invariants
 def test_el_cliente_real_no_arranca_sin_confirmar_el_modelo() -> None:
-    """La salvedad de R-1, hecha codigo: no se invoca a ciegas."""
+    """La salvedad de D-17, hecha codigo: no se invoca a ciegas."""
     with pytest.raises(NotImplementedError) as error:
         construir_cliente_real()
-    assert "R-1" in str(error.value)
+    assert "D-17" in str(error.value)
 
 
 # --- criterio 1: el bucle completo ---------------------------------------------------

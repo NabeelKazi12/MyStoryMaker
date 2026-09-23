@@ -406,6 +406,7 @@ para que un cambio en un documento se note en el otro.
 | --- | --- | --- | --- | --- |
 | El crédito vuelve a su valor inicial tras cualquier secuencia de éxito, fallo, timeout y cancelación | Pruebas basadas en propiedades sobre secuencias generadas de rutas de salida | T | §6.6 | Bloqueante |
 | Los tokens en vuelo nunca superan 100.000, y una reserva mayor que el crédito total se rechaza como error de planificación | Pruebas basadas en propiedades sobre planes generados | T | §4.1, §6.6 | Bloqueante |
+| Ningún paquete de redacción se construye ni se envía por encima de 25.000 tokens de entrada: el presupuesto se valida al construir el ensamblador y el prompt se mide antes de invocar | Pruebas unitarias sobre el presupuesto fuera de rango y sobre un prompt sobredimensionado, que no llega a pagar la llamada | T | §4.1, §4.3 | Bloqueante |
 | Ninguna tarea P2 o P3 espera indefinidamente: la cola envejece | Comprobación de modelos sobre la política de admisión | A | §6.6 | Advertencia |
 | Cada nivel de timeout vence, libera la reserva y se clasifica como fallo de contrato | Pruebas unitarias por nivel de timeout | T | §6.5 | Bloqueante |
 | Idempotencia: reejecutar con la misma clave devuelve el artefacto en lugar de invocar el modelo | Pruebas basadas en propiedades sobre la clave de seis campos | T | §6.4 | Bloqueante |

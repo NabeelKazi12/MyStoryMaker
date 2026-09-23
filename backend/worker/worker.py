@@ -19,6 +19,7 @@ from backend.agents.redactor.redactor import (
     SalidaInvalida,
     parsear,
 )
+from backend.context.presupuesto import MAXIMO_DE_ENTRADA, contar_tokens
 from backend.domain.production.ejecucion import Procedencia
 from backend.domain.vocabularies import ClaseDeFallo
 from backend.worker.modelo import (
@@ -57,6 +58,27 @@ class Worker:
     def ejecutar(self, tarea_id: str, paquete_id: str, prompt: str) -> Informe:
         """Una invocacion. Sin estado propio: todo lo que sabe se lo dan y lo devuelve."""
         comienzo = time.monotonic()
+
+        tokens_de_entrada = contar_tokens(prompt)
+        if tokens_de_entrada > MAXIMO_DE_ENTRADA:
+            # Se para antes de pagar la llamada. Un paquete que no cabe es fallo de
+            # presupuesto, no de contenido: no consume intentos narrativos (D-06).
+            detalle = (
+                f"el prompt ocupa {tokens_de_entrada} tokens sobre el maximo de entrada "
+                f"de {MAXIMO_DE_ENTRADA} (RF-CTX-08); no se envia"
+            )
+            return Informe(
+                tarea_id=tarea_id,
+                procedencia=self._procedencia(
+                    paquete_id,
+                    0,
+                    int((time.monotonic() - comienzo) * 1000),
+                    ClaseDeFallo.PRESUPUESTO,
+                ),
+                clase_de_fallo=ClaseDeFallo.PRESUPUESTO,
+                detalle_del_fallo=detalle,
+            )
+
         try:
             respuesta = self.cliente.invocar(prompt, max_tokens=MAX_TOKENS_REDACCION)
         except Exception as error:  # noqa: BLE001 - se clasifica, no se traga

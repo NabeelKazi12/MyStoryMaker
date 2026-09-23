@@ -133,7 +133,7 @@ def test_una_tarea_con_procedencia_y_sin_artefacto_queda_anotada(
     conn.execute(
         "INSERT INTO procedencia (id, agente, modelo, version_de_prompt, paquete_id, "
         "timestamp) "
-        "VALUES ('pr-1', 'redactor', 'claude-opus-5', '1.0.0', 'pq-1', datetime('now'))"
+        "VALUES ('pr-1', 'redactor', 'claude-haiku-4-5', '1.0.0', 'pq-1', datetime('now'))"
     )
 
     resultado = reanudar_al_arrancar(conn)
@@ -260,8 +260,12 @@ def test_las_decisiones_de_la_spec_estan_registradas(conn: sqlite3.Connection) -
         "SELECT id, alternativas, motivo FROM registro_decision ORDER BY id"
     ).fetchall()
 
-    assert len(filas) == 8
-    assert "rd-predicados" in {f["id"] for f in filas}
+    assert len(filas) == 9
+    identificadores = {f["id"] for f in filas}
+    assert "rd-predicados" in identificadores
+    # D-17 no borra a R-1: la sustituye y la cita como alternativa descartada. Una
+    # decision que desaparece del registro deja de poder contradecirse a la vista.
+    assert {"rd-r1", "rd-d17"} <= identificadores
     for fila in filas:
         assert fila["alternativas"].strip()
         assert fila["motivo"].strip()

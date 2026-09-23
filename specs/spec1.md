@@ -175,7 +175,7 @@ es un supuesto que nadie vuelve a mirar:
 | # | Qué asume | Qué sostiene en v1 |
 | --- | --- | --- |
 | S-1 | Una novela por proceso, una sola persona autora | El semáforo en memoria y la cola en SQLite: RF-ORQ-08 y RF-ORQ-11 |
-| S-2 | Un proveedor, un modelo por rol, ventana de 100.000 | RF-ORQ-20 y la pregunta P-1: sin equivalencia entre modelos, «no degradar» es comprobable |
+| S-2 | Un proveedor, un modelo por rol. Tras D-17 la ventana del modelo es de 200.000 y el techo de 100.000 es de operación, no del proveedor | RF-ORQ-20 y la pregunta P-1: sin equivalencia entre modelos, «no degradar» es comprobable |
 | S-3 | El límite que importa es de ocupación simultánea, no de tokens por minuto | Que RF-ORQ-08 baste sin un regulador de tasa al lado |
 | S-4 | El proveedor ofrece caché de prefijo con vida suficiente entre intentos | Nada bloqueante: si cae, RF-CTX-01 sigue siendo correcto y deja de ahorrar |
 | S-5 | Un solo proceso de backend, sin réplicas | Que un contador en memoria acote algo. Si cae, el semáforo tiene que ser distribuido |
@@ -345,7 +345,7 @@ supuesto que lo sostiene es S-10.
 | RF-WRK-04 | La salida del rol se valida contra el esquema del contrato común de `AGENTS.md` §3. Una salida que no valida, o truncada al alcanzar el techo de tokens, es fallo de contrato | `AGENTS.md` §3; `architecture.md` §6.5 |
 | RF-WRK-05 | `contexto_insuficiente: true` devuelve `resultado: null` con la lista `falta`, y el Orquestador reconstruye el paquete o replanifica. El agente no inventa | `AGENTS.md` §3 |
 | RF-WRK-06 | El rol **Redactor** está implementado con su prompt versionado en `backend/agents/redactor/prompts/`, y emite prosa más `hechos_nuevos_detectados`, `eventos_narrados`, `siembras_tocadas` y `recuento_palabras` | `AGENTS.md` §4.5 |
-| RF-WRK-09 ~~vigente~~ | **Sustituido por D-17**, pendiente de spec propia. Decía: el Redactor invoca `claude-opus-5` con pensamiento adaptativo y `effort: high`. El límite duro de generación es el techo de salida de la `Tarea`: **4.000 tokens**, el de `architecture.md` §4.2. No se usa prefill, que ese modelo rechaza. Con D-17 el modelo es `claude-haiku-4-5`, sin pensamiento extendido y sin `effort`; el techo de 4.000 y el no usar prefill se mantienen (`architecture.md` §5.1) | Esta spec, 9.2 R-1; `architecture.md` §5.1 D-17 |
+| RF-WRK-09 ~~vigente~~ | **Sustituido por D-17**, ya implementado y anotado como desviación de `AGENTS.md` §10 en 9.2. Decía: el Redactor invoca `claude-opus-5` con pensamiento adaptativo y `effort: high`. El límite duro de generación es el techo de salida de la `Tarea`: **4.000 tokens**, el de `architecture.md` §4.2. No se usa prefill, que ese modelo rechaza. Con D-17 el modelo es `claude-haiku-4-5`, sin pensamiento extendido y sin `effort`; el techo de 4.000 y el no usar prefill se mantienen (`architecture.md` §5.1) | Esta spec, 9.2 R-1; `architecture.md` §5.1 D-17 |
 | RF-WRK-07 | Un prompt editado sin incrementar su versión semántica se detecta: el hash del fichero cambia y la versión no | `AGENTS.md` §8; `verification.md` §8 |
 | RF-WRK-08 | Ningún registro de ejecución contiene prosa; los registros referencian el id del `Borrador` | `architecture.md` §9 |
 
@@ -636,12 +636,19 @@ Antes de implementar RF-WRK-09 hay que confirmarlos.
 
 **R-1 · sustitución.** El modelo de los roles que escriben prosa pasa a ser
 `claude-haiku-4-5`, registrado como D-17 en `architecture.md` §5.1 con su motivo y su
-alternativa descartada. La salvedad de fiabilidad de arriba se hereda sin cambios: el
-identificador, la ventana de 200.000, el precio y el mínimo cacheable de 4.096 tokens
-tampoco se han contrastado contra la Models API. **El cambio no está implementado**:
-`backend/worker/modelo.py` y la fila semilla de `RegistroDeDecision` de la migración
-inicial siguen diciendo `claude-opus-5`, y alinearlos es comportamiento nuevo, así que
-recorre la cadena de `AGENTS.md` §10 con su propia spec.
+alternativa descartada. **El cambio está implementado**: `backend/worker/modelo.py` invoca
+ese modelo sin pensamiento extendido y sin `effort`, y la migración inicial siembra la fila
+`rd-d17` conservando `rd-r1` marcada como sustituida. Se hizo por instrucción directa de la
+persona autora, sin spec propia: es una **desviación declarada** de `AGENTS.md` §10, que
+pide spec para todo comportamiento nuevo. Lo que sigue pendiente es cablear el cliente real
+(desviación 1 de esta spec), no el identificador.
+
+La salvedad de fiabilidad de arriba se estrecha pero no desaparece. El identificador
+`claude-haiku-4-5`, la ventana de 200.000, el precio de $1 y $5 por millón, el rechazo de
+`effort`, el pensamiento solo por presupuesto fijo y el mínimo cacheable de 4.096 tokens se
+han contrastado contra la tabla de referencia vigente del proveedor. **No** se han
+contrastado contra la Models API en vivo, porque este entorno sigue sin credenciales: eso
+es lo que hay que hacer antes de la primera invocación pagada.
 
 **R-7 · conjunto de partida del catálogo.** Nueve predicados, sin inventar vocabulario:
 los siete valores de `dimensión_de_estado` de `definitions.md` —salud, ubicación,
