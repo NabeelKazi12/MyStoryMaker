@@ -345,7 +345,7 @@ supuesto que lo sostiene es S-10.
 | RF-WRK-04 | La salida del rol se valida contra el esquema del contrato común de `AGENTS.md` §3. Una salida que no valida, o truncada al alcanzar el techo de tokens, es fallo de contrato | `AGENTS.md` §3; `architecture.md` §6.5 |
 | RF-WRK-05 | `contexto_insuficiente: true` devuelve `resultado: null` con la lista `falta`, y el Orquestador reconstruye el paquete o replanifica. El agente no inventa | `AGENTS.md` §3 |
 | RF-WRK-06 | El rol **Redactor** está implementado con su prompt versionado en `backend/agents/redactor/prompts/`, y emite prosa más `hechos_nuevos_detectados`, `eventos_narrados`, `siembras_tocadas` y `recuento_palabras` | `AGENTS.md` §4.5 |
-| RF-WRK-09 | El Redactor invoca `claude-opus-5` con pensamiento adaptativo y `effort: high`. El límite duro de generación es el techo de salida de la `Tarea`: **4.000 tokens**, el de `architecture.md` §4.2. No se usa prefill, que ese modelo rechaza | Esta spec, 9.2 R-1 |
+| RF-WRK-09 ~~vigente~~ | **Sustituido por D-17**, pendiente de spec propia. Decía: el Redactor invoca `claude-opus-5` con pensamiento adaptativo y `effort: high`. El límite duro de generación es el techo de salida de la `Tarea`: **4.000 tokens**, el de `architecture.md` §4.2. No se usa prefill, que ese modelo rechaza. Con D-17 el modelo es `claude-haiku-4-5`, sin pensamiento extendido y sin `effort`; el techo de 4.000 y el no usar prefill se mantienen (`architecture.md` §5.1) | Esta spec, 9.2 R-1; `architecture.md` §5.1 D-17 |
 | RF-WRK-07 | Un prompt editado sin incrementar su versión semántica se detecta: el hash del fichero cambia y la versión no | `AGENTS.md` §8; `verification.md` §8 |
 | RF-WRK-08 | Ningún registro de ejecución contiene prosa; los registros referencian el id del `Borrador` | `architecture.md` §9 |
 
@@ -608,7 +608,7 @@ de `verification.md` §10:
 | --- | --- |
 | `definitions.md` | **Cambia.** Añade la clase `Predicado` —catálogo de RF-STO-07— y el vocabulario cerrado `exclusividad_de_predicado` con los valores `funcional` y `multivalor`. Exige `RegistroDeDecision`, según `AGENTS.md` §10.1 |
 | `domain-knowledge.md` | **Cambia.** El diagrama 8 incorpora `PREDICADO` y su arista con `HECHO`. Con `Volumen` y `PREDICADO` deja de ser «las 12 clases del núcleo» y pasa a ser el esquema de v1: hay que decidir cuál de las dos cosas es y ajustar su encabezado |
-| `architecture.md` | **Cambia al cerrar.** Las cifras de §4.2 se corrigen con lo que registre `Procedencia`, según el TODO que ese apartado ya declara. El supuesto S-9 de 3.5 ya está recogido en §11; S-10 y S-11 tienen que añadirse ahí al cerrar. Además, su §12 pierde cinco entradas: R-1 responde las preguntas 1 y 2 —los 100.000 son operativos— y R-2, R-3 y R-4 responden la 3, la 4 y la 5. R-5 cierra el TODO de §6.5, y R-1 obliga a resolver el de caché de prefijo de §4.7 |
+| `architecture.md` | **Cambia al cerrar.** Las cifras de §4.2 se corrigen con lo que registre `Procedencia`, según el TODO que ese apartado ya declara. El supuesto S-9 de 3.5 ya está recogido en §11; S-10 y S-11 tienen que añadirse ahí al cerrar. Además, su §12 da por respondidas cinco entradas: las preguntas 1 y 2 —los 100.000 son operativos— y la 3, la 4 y la 5 por R-2, R-3 y R-4. Se marcan en el sitio en lugar de borrarse, porque `specs/` las cita por número. Las preguntas 1 y 2 ya están marcadas, respondidas por D-17 en lugar de por R-1. R-5 cierra el TODO de §6.5, y R-1 obliga a resolver el de caché de prefijo de §4.7 |
 | `verification.md` | **Cambia al cerrar.** §10 pierde los huecos que v1 cierra y gana los que v1 abre, enumerados en 8.8 |
 | `AGENTS.md`, `CLAUDE.md` | Sin cambios. v1 implementa lo que ya dicen |
 
@@ -620,7 +620,7 @@ aquí quedan escritos (`AGENTS.md` §9).
 
 | # | Resuelve | Decisión | Motivo | Alternativa descartada |
 | --- | --- | --- | --- | --- |
-| R-1 | P-1 y la pregunta 2 de `architecture.md` §12 | El Redactor usa `claude-opus-5`, pensamiento adaptativo, `effort: high`, `max_tokens` igual al techo de salida de la `Tarea` (4.000) | Una llamada de redacción cuesta ≈ $0,21 y una novela de 120.000 palabras ≈ $15 de Redactor: el coste no domina y la prosa es el producto | `claude-sonnet-5` para ahorrar ≈ $9 por novela. Bajar de modelo por coste es lo que D-08 prohíbe hacer en silencio; si alguna vez se hace, se decide y se registra |
+| R-1 ~~vigente~~ | P-1 y la pregunta 2 de `architecture.md` §12 | **Sustituida por D-17** (`architecture.md` §5.1), que fija `claude-haiku-4-5`. Lo que sigue es el registro aprobado el 2026-09-22, que se conserva porque D-17 lo cita como alternativa descartada: el Redactor usa `claude-opus-5`, pensamiento adaptativo, `effort: high`, `max_tokens` igual al techo de salida de la `Tarea` (4.000) | Una llamada de redacción cuesta ≈ $0,21 y una novela de 120.000 palabras ≈ $15 de Redactor: el coste no domina y la prosa es el producto | `claude-sonnet-5` para ahorrar ≈ $9 por novela. Bajar de modelo por coste es lo que D-08 prohíbe hacer en silencio; si alguna vez se hace, se decide y se registra |
 | R-2 | P-2 y la pregunta 3 de `architecture.md` §12 | Los reintentos de transporte los hace el cliente del SDK: `max_retries = 3`, retroceso exponencial con *jitter* | Una sola capa mantiene la contabilidad de coste de RF-ORQ-09 intacta | Implementar la escalera de transporte en `worker/`: dos capas multiplican —tres por tres son nueve llamadas pagadas por un corte de red— |
 | R-3 | P-3 y la pregunta 4 de `architecture.md` §12 | Un historial tipificado por intento, no dos contadores | D-06 clasifica en cuatro clases, no en dos: con dos contadores, transporte y presupuesto caen en el mismo saco y se pierde la señal de §9 | Dos contadores enteros. Más baratos hoy, pero exigen migración en cuanto alguien pregunte por qué se reintentó |
 | R-4 | P-4 y la pregunta 5 de `architecture.md` §12 | El borrador rechazado **no** entra en el intento siguiente; sí entran los `Defecto` abiertos | `architecture.md` §3.2: reinyectarlo invita a reproducirlo, y la prosa es el componente más caro del paquete | Incluirlo marcado como rechazado. Los modelos anclan en el texto presente por mucho que se etiquete, y el paquete dejaría de ser de tamaño constante |
@@ -633,6 +633,15 @@ aquí quedan escritos (`AGENTS.md` §9).
 salen de una tabla de referencia con fecha de corte anterior a esta spec, y no se han
 podido contrastar contra la API de modelos porque este entorno no tiene credenciales.
 Antes de implementar RF-WRK-09 hay que confirmarlos.
+
+**R-1 · sustitución.** El modelo de los roles que escriben prosa pasa a ser
+`claude-haiku-4-5`, registrado como D-17 en `architecture.md` §5.1 con su motivo y su
+alternativa descartada. La salvedad de fiabilidad de arriba se hereda sin cambios: el
+identificador, la ventana de 200.000, el precio y el mínimo cacheable de 4.096 tokens
+tampoco se han contrastado contra la Models API. **El cambio no está implementado**:
+`backend/worker/modelo.py` y la fila semilla de `RegistroDeDecision` de la migración
+inicial siguen diciendo `claude-opus-5`, y alinearlos es comportamiento nuevo, así que
+recorre la cadena de `AGENTS.md` §10 con su propia spec.
 
 **R-7 · conjunto de partida del catálogo.** Nueve predicados, sin inventar vocabulario:
 los siete valores de `dimensión_de_estado` de `definitions.md` —salud, ubicación,
@@ -729,7 +738,7 @@ Las cuatro preguntas restantes de `architecture.md` §12 siguen sin afectar a v1
 
 | Pregunta de `architecture.md` §12 | Estado |
 | --- | --- |
-| 1 · ¿El límite de 100.000 es del proveedor o de operación? | **Respondida por R-1**: el modelo elegido tiene ventana de 1M, así que los 100.000 son una decisión de operación. Se mantienen como límite duro y no se suben |
+| 1 · ¿El límite de 100.000 es del proveedor o de operación? | **Respondida**, hoy por D-17: el modelo elegido tiene ventana de 200.000, así que los 100.000 son una decisión de operación. Se mantienen como límite duro y no se suben. R-1 daba la misma respuesta con la ventana de 1M de `claude-opus-5` |
 | 8 · ¿Qué umbral marca dos hechos como duplicado aproximado? | RF-CAN-03 deduplica solo de forma exacta. La deduplicación aproximada no entra en v1 |
 | 9 · ¿Cuánto puede aplazarse una tarea P2? | No hay tareas P2 en v1: juicio y crítica están fuera de alcance |
 | 10 · ¿Dónde se consultan las señales de §9? | RNF-05 obliga a registrarlas y RF-API-05 a poder leerlas; con qué herramienta se miran es una decisión de operación, no de esta spec |

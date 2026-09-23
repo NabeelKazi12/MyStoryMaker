@@ -411,6 +411,7 @@ para que un cambio en un documento se note en el otro.
 | Idempotencia: reejecutar con la misma clave devuelve el artefacto en lugar de invocar el modelo | Pruebas basadas en propiedades sobre la clave de seis campos | T | §6.4 | Bloqueante |
 | Reanudación: toda `Tarea` que quedó `en_curso` sin `Procedencia` vuelve a `lista` y suma un intento | Pruebas de integración con caída simulada del proceso | T | §6.4 | Bloqueante |
 | Sin degradación silenciosa: ninguna ruta cambia modelo, prompt o paquete sin dejarlo en `Procedencia` | Análisis del grafo de llamadas más inspección en revisión de código | A / I | §6.5 | Bloqueante |
+| El modelo invocado es el declarado en `architecture.md` §5.1, y la llamada no lleva `effort` ni pensamiento extendido | Prueba de contrato sobre los parámetros con que `worker/` construye la invocación, más comprobación de que `Procedencia` registra ese mismo identificador | T | §5.1, §9 | Bloqueante |
 | El estado se pasa por referencia: ninguna `Tarea` recibe la salida literal de la anterior | Análisis estático de las entradas de `dispatch` | A | §6.4 | Bloqueante |
 
 Esta tabla es la que faltaba cuando `architecture.md` §10 llama a la reserva no
@@ -491,9 +492,19 @@ verificación sin huecos declarados suele significar que no se ha mirado.
 - **El *replay* de §7 supone** que el índice vectorial devuelve los mismos vecinos
   para la misma consulta tras una reindexación. No está comprobado; si no se
   cumple, el *replay* reproduce la llamada pero no el paquete.
-- **Las cuatro decisiones de stack** de `architecture.md` §2.1 no viven en
-  ninguna enumeración, así que la comprobación de `RegistroDeDecision` no detecta
-  que cambien.
+- **Las cinco decisiones de stack** de `architecture.md` §2.1 —desde que D-17
+  añadió el modelo generador— no viven en ninguna enumeración, así que la
+  comprobación de `RegistroDeDecision` no detecta que cambien.
+- **Que la prosa de `claude-haiku-4-5` dé el listón no está medido.** D-17
+  (`architecture.md` §5.1) elige el modelo por coste y deja escrito que la calidad
+  es una hipótesis. Refutarla o confirmarla corresponde a las dimensiones de
+  estilo de §4, y hoy ninguna puede: las de `juez_llm` solo penalizan, los
+  umbrales del `ContratoDeEstilo` no están decididos —el hueco de abajo— y el
+  conjunto congelado de escenas de §7, que es lo único que permitiría comparar dos
+  modelos sobre el mismo material, no existe. Clase U mientras siga así. La
+  decisión escrita al lado: se acepta como riesgo, porque el modelo se puede
+  cambiar sin migración y el gasto de elegir mal son ≈ $3 por novela, no un
+  esquema que rehacer.
 - **Los umbrales numéricos del `ContratoDeEstilo`** que cobra la fila «Métricas de
   estilo» de §4 no están decididos. La fila declara quién comprueba y con qué
   proyección; qué margen tolera cada métrica es comportamiento nuevo y exige spec.

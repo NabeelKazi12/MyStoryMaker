@@ -81,7 +81,8 @@ Un cambio en esta tabla requiere un `RegistroDeDecision`.
 | Backend | FastAPI (Python) | La generación tarda minutos; hace falta asincronía y SSE, no request/response |
 | Frontend | React (Vite) | Tres vistas de lectura; ninguna lleva lógica de dominio |
 | Persistencia | SQLite | Decenas de miles de filas y un solo autor por proceso (S-1) |
-| Ventana del modelo | 100.000 tokens | Techo, no objetivo. Se interpreta como ocupación simultánea (D-13) |
+| Modelo generador | `claude-haiku-4-5` | Un único modelo para todo lo que escribe prosa (D-17, §5.1) |
+| Ventana del modelo | 200.000 tokens | La del modelo. El techo operativo son 100.000 y se interpreta como ocupación simultánea (D-13) |
 
 **El frontend no decide nada.** Sirve el editor de canon, el lector de borradores con diff
 entre versiones y el panel de defectos, juicios y estado de puertas. Toda validación ocurre en
@@ -324,7 +325,7 @@ tabla es el orden del paquete, que fija `AGENTS.md` §4.5 y es parte del contrat
 
 | # | Componente | Tokens | Recorte | Notas |
 |---|---|---:|---|---|
-| 1 | Estático: premisa, `ContratoDeEstilo`, `PoliticaDeContenido` | 2.000 | No | Idéntico en todo el volumen: es el prefijo cacheable |
+| 1 | Estático: premisa, `ContratoDeEstilo`, `PoliticaDeContenido` | 2.000 | No | Idéntico en todo el volumen. Sería el prefijo cacheable, pero no llega al mínimo del modelo (§4.7) |
 | 2 | Estado del mundo: hechos vigentes filtrados | 6.000 | 4.º | Apretando el filtro estructural |
 | 3 | Continuidad: prosa literal de la escena anterior | 3.500 | 3.º | Hasta los últimos párrafos completos |
 | 4 | Arco: pirámide de resúmenes de parte, capítulo y escenas | 4.000 | 1.º | Se sueltan primero los niveles más lejanos |
@@ -422,8 +423,14 @@ componente estático —2.000 tokens— es idéntico para todas las escenas de u
 dos intentos de la misma escena solo cambia la cola. El prefijo compartido se queda en esos
 2.000 tokens porque el segundo componente, estado del mundo, ya difiere en cada escena;
 adelantar la voz al segundo puesto lo subiría a 3.500, pero contradiría el orden del contrato y
-cambiaría el `hash` del paquete, así que exige spec. TODO: confirmar que el proveedor ofrece
-caché de prefijo, su granularidad y su tiempo de vida.
+cambiaría el `hash` del paquete, así que exige spec.
+
+**Hoy ese prefijo no se cachea.** El proveedor ofrece caché de prefijo, pero el mínimo
+cacheable de `claude-haiku-4-5` son 4.096 tokens (§5.1) y el prefijo compartido son 2.000. No
+hay error: la petición se sirve y el ahorro simplemente no llega. Alcanzar el mínimo exigiría
+meter el estado del mundo en el prefijo, que difiere en cada escena, o reordenar el paquete,
+que D-16 prohíbe sin spec. Es exactamente la consecuencia que S-4 declaraba: D-16 sigue siendo
+correcto y deja de ahorrar, y ningún invariante cambia.
 
 ---
 
@@ -446,6 +453,32 @@ Lo que sí es arquitectura, y está en este documento:
 
 Un solo rol escribe en el canon —el Canonizador— y actúa solo sobre borradores ya aceptados.
 Ningún agente invoca a otro agente: `agents/` no importa de `agents/` (§2.3).
+
+### 5.1 Modelo de los roles que generan prosa
+
+Todo lo que escribe novela usa un único modelo: **`claude-haiku-4-5`** (D-17). Hoy eso es el
+Redactor, el único rol con invocación de modelo que produce prosa. Los roles de juicio, edición
+y canonización no tienen modelo asignado: la pregunta 2 de §12 sigue abierta para ellos.
+
+| Parámetro | Valor | Motivo |
+|---|---|---|
+| Identificador | `claude-haiku-4-5` | Un modelo por rol (S-2); con un solo rol que escribe prosa, un solo modelo |
+| Ventana | 200.000 tokens | Duplica el techo operativo de 100.000, que queda confirmado como decisión de operación y no del proveedor (responde la pregunta 1 de §12) |
+| Precio | $1 y $5 por millón de tokens de entrada y de salida | Con el reparto de §4.3 —24.000 de entrada y 3.500 de salida— una redacción de escena sale a ≈ $0,04 y una novela de 120.000 palabras a ≈ $3 de Redactor |
+| Techo de generación | 4.000 tokens | El techo de salida de la `Tarea` (§4.2), enviado como límite duro (§6.5) |
+| Pensamiento extendido | Desactivado | Este modelo solo admite presupuesto fijo, y ese presupuesto se descuenta del mismo techo de 4.000 que la prosa: pensar recortaría la escena y la truncaría, que es fallo de contrato (§6.5). Activarlo exige subir el techo y recalibrar §4.2 |
+| Esfuerzo (`effort`) | No se envía | El modelo lo rechaza |
+| Prefill de la respuesta | No se usa | El modelo lo admite, pero la salida la fija el esquema del contrato común de `AGENTS.md` §3; es una elección, no una restricción del proveedor |
+| Prefijo mínimo cacheable | 4.096 tokens | Por encima del componente estático de 2.000, así que la caché de prefijo no entra hoy (§4.7) |
+
+**Cambiar de modelo sigue siendo una decisión registrada, nunca un fallback** (D-08). Este es
+el modelo más barato del catálogo, de modo que la deriva silenciosa que D-08 persigue solo
+puede ir ya hacia arriba en calidad y coste: igual de invisible y más cara.
+
+**La calidad de la prosa con este modelo no está medida.** El coste deja de ser un factor
+—≈ $3 por novela—, pero la hipótesis de que basta para el producto es justo eso, una hipótesis,
+y las dimensiones de estilo de `verification.md` §4 son quienes tienen que refutarla o
+confirmarla. Si la refutan, subir de modelo es otro `RegistroDeDecision`.
 
 ---
 
@@ -826,9 +859,9 @@ decisiones que cuelgan de él, así que cada uno lleva qué se cae con él.
 | # | Supuesto | Si es falso |
 |---|---|---|
 | S-1 | Una sola novela en curso por proceso, con una sola persona autora | Cambian D-13 y D-04: harían falta presupuesto por obra y aislamiento entre procesos |
-| S-2 | Un único proveedor, con un modelo por rol y ventana de 100.000 tokens | Cambia D-08: el fallback entre modelos deja de ser excepción y hay que definir equivalencia |
+| S-2 | Un único proveedor, con un modelo por rol. Para los roles que escriben prosa está fijado: `claude-haiku-4-5`, ventana de 200.000 (§5.1, D-17) | Cambia D-08: el fallback entre modelos deja de ser excepción y hay que definir equivalencia |
 | S-3 | El límite que importa es de ocupación simultánea, no de tokens por minuto | Hace falta además un regulador de tasa junto al semáforo |
-| S-4 | El proveedor ofrece caché de prefijo con tiempo de vida suficiente entre intentos | D-16 sigue siendo correcto pero deja de ahorrar; no cambia ningún invariante |
+| S-4 | El proveedor ofrece caché de prefijo con tiempo de vida suficiente entre intentos. **Ya no se sostiene para el Redactor**: la ofrece, pero el prefijo compartido de 2.000 tokens no llega al mínimo de 4.096 del modelo (§4.7) | La consecuencia prevista ya se ha materializado: D-16 sigue siendo correcto y deja de ahorrar; no cambia ningún invariante |
 | S-5 | El despliegue es un proceso único, no varias réplicas | El semáforo de §6.6 tendría que ser distribuido |
 | S-6 | El volumen de vectores se queda en decenas de miles | La búsqueda exhaustiva de `sqlite-vec` deja de rendir y hay que revisar §3.1 |
 | S-7 | Las cifras de §4.2 distintas de la redacción de escena son del orden correcto | Cambia el número de tareas concurrentes, no el mecanismo |
@@ -842,10 +875,15 @@ decisiones que cuelgan de él, así que cada uno lleva qué se cae con él.
 Ninguna se ha resuelto por suposición razonable. Bloquean la spec que convierta este documento
 en comportamiento.
 
-1. **¿El límite de 100.000 es del proveedor o de operación?** De ahí depende si hace falta
-   regulador de tasa además del semáforo, y si el techo es ajustable.
-2. **¿Qué modelo se usa por rol?** Sin esa decisión no se pueden calibrar las reservas de §4.2
-   ni decidir qué es una degradación.
+La numeración se conserva aunque una pregunta se cierre: `specs/` y `verification.md` citan
+estos números.
+
+1. ~~**¿El límite de 100.000 es del proveedor o de operación?**~~ **Resuelta** por D-17: el
+   modelo tiene ventana de 200.000, así que los 100.000 son decisión de operación. Se mantienen
+   como límite duro y no se suben. Sigue sin haber regulador de tasa, amparado en S-3.
+2. ~~**¿Qué modelo se usa por rol?**~~ **Resuelta para los roles que escriben prosa** por D-17:
+   `claude-haiku-4-5` (§5.1). **Abierta** para juez, editores y Canonizador, que hoy no tienen
+   modelo asignado y por tanto tampoco reservas calibradas en §4.2.
 3. **¿Cuántos reintentos de transporte y con qué retroceso?** Afecta a cuánto tarda en
    detectarse una caída del proveedor.
 4. **¿Dos contadores de intento o uno con historial tipificado?** Afecta a `definitions.md` y
@@ -927,6 +965,7 @@ volver a discutirla.
 | D-14 | Semáforo de crédito con reserva y liberación, no cubo de fichas | Límite por número de tareas concurrentes: trata como iguales cosas que difieren en un orden de magnitud | §6.6 |
 | D-15 | Todo se encola; solo se rechaza lo que no cabe ni en un sistema vacío | FIFO puro: deja una canonización detrás de veinte reescrituras | §6.6 |
 | D-16 | El orden del paquete es el del contrato de rol y es parte del contrato | Adelantar la voz al segundo puesto para ampliar el prefijo cacheable: contradice `AGENTS.md` §4.5 y cambia el `hash` | §4.7 |
+| D-17 | Los roles que escriben prosa usan `claude-haiku-4-5`, sin pensamiento extendido y sin `effort` | `claude-opus-5`, que registraba R-1 de `specs/spec1.md`: cinco veces el precio por token para un producto cuyo coste ya no dominaba, y que además ocultaba que la calidad de prosa nunca se había medido contra la rúbrica | §5.1 |
 
 ---
 
