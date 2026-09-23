@@ -495,6 +495,8 @@ Bloquean la aprobación (`AGENTS.md` §10.2).
 ## 13. Plan de implementación
 
 Según `AGENTS.md` §10.3 se añade a este mismo documento **después** de que la spec pase a
-`aprobada` y con el apartado 12 vacío. Hoy no existe: el borrador previo vive en
-`specs/plan-frontend.md` y cubre un alcance mayor que el de esta spec —incluye trabajo de
-backend—, así que deberá recortarse al sujeto de este documento antes de proponerse.
+`aprobada` y con el apartado 12 vacío. Mientras tanto vive aparte, en
+`specs/plan-frontend.md`, en estado `borrador` y con el mismo sujeto que esta spec: su paso 0
+comprueba las precondiciones RC-01…RC-08 y levanta el inventario de §3.3, y ninguno de sus
+pasos escribe en `backend/`. Al aprobar se decide si se pliega dentro de este documento o si
+la referencia queda permanente.
