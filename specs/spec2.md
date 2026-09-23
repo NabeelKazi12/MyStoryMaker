@@ -4,7 +4,8 @@
 | --- | --- |
 | **Identificador** | SPEC-002 |
 | **Título** | Primera versión del frontend: las tres vistas de `CLAUDE.md` §2.3, generadas del contrato y cobradas por sus validadores |
-| **Estado** | `propuesta`. El apartado 12 no está vacío, así que la puerta *Spec aprobada* de `AGENTS.md` §10.5 sigue **sin superar**: requiere firma de una persona |
+| **Estado** | `aplazada` el 2026-09-23 por decisión de la persona autora, tras el documento de alcance que origina SPEC-003. Sigue siendo `propuesta` en lo demás —sus cuatro preguntas abiertas siguen abiertas— y no se construye hasta que SPEC-003 cierre |
+| **Por qué se aplaza** | SPEC-003 pide un frontend de **lectura** para quien recibe la novela; éste especifica un frontend de **operación** para quien conduce el sistema. No se contradicen y no se descarta ninguno de los dos: se ordenan. Lo que el alcance evalúa es la lectura |
 | **Fecha** | 2026-09-23 |
 | **Documentos de referencia** | `docs/verification.md`, `docs/definitions.md`, `docs/architecture.md`, `AGENTS.md`, `CLAUDE.md` y la skill de Feature-Sliced Design, en su estado del 2026-09-23 |
 | **Sujeto** | El frontend, y solo el frontend. Ningún requisito de este documento se satisface escribiendo código en `backend/` |
