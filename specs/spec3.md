@@ -4,7 +4,7 @@
 | --- | --- |
 | **Identificador** | SPEC-003 |
 | **Título** | Del generador de novela al producto del alcance: entrevista, lectura, harness de tres roles, guardarraíles, verificación formal y observabilidad |
-| **Estado** | `propuesta`, con el apartado 9 **vacío** desde el 2026-09-23: las seis preguntas quedaron resueltas por la persona autora. La puerta *Spec aprobada* de `AGENTS.md` §10.5 solo espera su firma explícita |
+| **Estado** | `aprobada` el 2026-09-23 por @Nabeel, con el apartado 9 vacío y los 61 requisitos con verificación asignada: la puerta *Spec aprobada* de `AGENTS.md` §10.5 queda superada. El plan del apartado 10 queda en `borrador` y necesita su propia firma antes de escribir código |
 | **Fecha** | 2026-09-23 |
 | **Origen** | El documento de alcance del proyecto entregado por la persona autora el 2026-09-23 |
 | **Documentos de referencia** | `docs/definitions.md`, `docs/architecture.md`, `docs/verification.md`, `AGENTS.md`, `CLAUDE.md`, `specs/spec1.md` (SPEC-001, construida) y `specs/spec2.md` (SPEC-002, propuesta) |
@@ -348,18 +348,187 @@ respuesta porque el apartado 2 y el apartado 3 se apoyan en ellas.
 
 ---
 
-## 10. Plan de implementación
+## 10. Plan de implementación — PLAN-003
 
-Según `AGENTS.md` §10.3 se añade **después** de que esta spec pase a `aprobada` y con el
-apartado 9 vacío. El orden de dependencia que el plan desarrollará, para que se pueda juzgar
-la spec sabiendo en qué se traduce:
+| | |
+| --- | --- |
+| **Estado** | `borrador`. La puerta *Plan aprobado* de `AGENTS.md` §10.5 no está superada: hasta su firma no se escribe código |
+| **Spec de la que cuelga** | Esta misma, `aprobada` el 2026-09-23 por @Nabeel |
+| **Ubicación** | En el apartado final de la spec, como manda `AGENTS.md` §10.3, para que el qué y el cómo no puedan divergir en dos documentos |
 
-| Fase | Contenido | Por qué va aquí |
+El ciclo de cada paso es el TDD de `AGENTS.md` §10.4: el test se nombra aquí **antes** de
+escribirlo, se ve fallar por el motivo correcto y solo entonces se implementa. Cada fase
+cierra con `uv run pytest`, `uv run pytest -m invariants`, `ruff` y `mypy backend/` en verde.
+
+### 10.1 Las fronteras que este plan no puede cruzar
+
+`CLAUDE.md` §4 fija seis reglas de dependencia. Cuatro corren riesgo real en este plan, así
+que cada una tiene su paso de puerta y no queda en buena voluntad:
+
+| Regla | Riesgo concreto en este plan | Dónde se cobra |
 | --- | --- | --- |
-| A | Esquema y ontología: destinatario, uso por capítulo, cronología, resúmenes, checkpoint, listas prohibidas, audit log, versiones | Todo lo demás lee o escribe aquí. Una migración tardía obliga a rehacer lo construido encima |
-| B | Guardarraíles y validadores programáticos | Son deterministas y baratos, y son los que pueden parar la línea desde el primer capítulo |
-| C | Los tres roles y los dos hooks, con el entrevistador primero | Sin brief validado no hay nada que planificar ni que escribir |
-| D | Observabilidad en Langfuse, con prompts versionados | Va antes que la evaluación: medir sin trazas obliga a repetirlo todo después |
-| E | Lectura web, regeneración selectiva, versiones y exportación a PDF | Depende de A para saber qué capítulos tocar |
-| F | Lean sobre la cronología y TLA+ sobre el harness | El harness tiene que existir antes de especificarlo, y la cronología antes de verificarla |
-| G | Los cinco briefs, la tabla por validador, la iteración de tuning y los entregables del repositorio | Es el cierre: mide lo construido y lo deja documentado |
+| `domain/` no importa de ningún otro paquete | `Destinatario` y `EventoDeCronologia` nacen junto a su persistencia y acaban importando el store | A-01, con la puerta de límites ampliada |
+| Solo `store/` habla con SQLite | El guardarraíl lee sus listas de la base y el validador formal lee la cronología | B-02 y F-01 pasan por repositorio, nunca por `sqlite3` |
+| `agents/` no importa de `agents/` | Entrevistador, planner y editor se llaman entre sí en lugar de coordinarse en `orchestrator/` | C-05 y C-06 |
+| `api/` no invoca modelos | La petición de cambio del lector regenera capítulos desde la ruta HTTP | E-04 encola `Tarea`; la ruta devuelve `202` |
+
+Regla nueva que este plan añade y que `test_import_boundaries` tendrá que hacer cumplir:
+**nadie importa `observability/` desde `domain/`, `quality/` ni `agents/`**. La
+instrumentación vive en `orchestrator/`, `worker/` y `api/`. Un juez que sabe que está
+siendo observado es un juez distinto.
+
+### 10.2 Fase A · Esquema y ontología
+
+Al cerrar, existe dónde guardar todo lo que las demás fases escriben. Va primero porque una
+migración tardía obliga a rehacer lo construido encima.
+
+| # | Paso | Módulos | Test que lo demuestra | Requisitos |
+| --- | --- | --- | --- | --- |
+| A-01 | `Destinatario` y `ElementoPersonalizado` en `domain/spec/`, con su `RegistroDeDecision` y su entrada en `definitions.md` | `domain/spec/`, `docs/` | `test_destinatario_exige_nombre_y_al_menos_un_elemento_obligatorio` | RF-CFG-07 |
+| A-02 | `EventoDeCronologia` y fecha de nacimiento de `Personaje` en el dominio | `domain/diegetic/` | `test_un_evento_de_cronologia_sin_momento_no_existe` | RF-BIB-02 |
+| A-03 | Migración `0002`: `hecho_capitulo`, `evento_cronologia`, `resumen_capitulo`, `checkpoint_capitulo`, `lista_prohibida`, `audit_log` y `version_novela` | `migrations/` | `test_migracion_0002_crea_las_siete_tablas_y_es_reversible` | RF-BIB-01 a RF-BIB-04, RF-GRD-01, RF-GRD-06, RF-LEC-07 |
+| A-04 | Repositorios de la story bible en `store/` | `store/` | `test_la_story_bible_se_consulta_por_personaje_lugar_hecho_y_cronologia` | RF-BIB-05 |
+| A-05 | Registro de uso: al canonizar, cada `Hecho` anota los capítulos que lo usan | `store/`, `orchestrator/` | `test_un_hecho_usado_en_dos_capitulos_los_lista_ambos` | RF-BIB-01 |
+| A-06 | Resumen por capítulo, y su entrada en el paquete de contexto | `context/`, `store/` | `test_el_contexto_del_capitulo_n_trae_resumenes_y_no_prosa_literal` | RF-BIB-03 |
+| A-07 | Checkpoint por capítulo y reanudación | `orchestrator/`, `store/` | `test_reanudar_desde_checkpoint_no_duplica_ni_pierde_capitulos` | RF-BIB-04 |
+| A-08 | Ampliar `test_import_boundaries` con los módulos nuevos | tubería | `test_import_boundaries` ampliado | §10.1 |
+
+**Marcha atrás.** Si `0002` resulta más grande de lo que cabe en una revisión, se parte por
+tabla, nunca por mitad de tabla: media migración aplicada es peor que ninguna.
+
+### 10.3 Fase B · Guardarraíles y validadores programáticos
+
+Al cerrar, el sistema puede rechazar un capítulo por sí solo. Van antes que los roles porque
+son deterministas, baratos y son los que pueden parar la línea desde el primer capítulo.
+
+| # | Paso | Módulos | Test que lo demuestra | Requisitos |
+| --- | --- | --- | --- | --- |
+| B-01 | Normalizador: minúsculas, acentos, plural en -s/-es y separadores, con la lista de transformaciones cerrada | `quality/` | `test_normaliza_mayusculas_acentos_plurales_y_separadores` | RF-GRD-02 |
+| B-02 | Guardarraíl de tres niveles leyendo sus listas por repositorio | `quality/`, `store/` | `test_el_guardarrail_detecta_un_caso_de_cada_nivel`, `test_detecta_la_variante_con_acento_y_la_plural` | RF-GRD-01, RF-GRD-03 |
+| B-03 | Devolución al writer con límite de intentos, y parada informada al agotarlo | `orchestrator/` | `test_agotado_el_limite_la_generacion_se_detiene_e_informa` | RF-GRD-04, RF-HAR-06 |
+| B-04 | Audit log de las decisiones del policy engine | `store/`, `orchestrator/` | `test_cada_coincidencia_deja_fila_en_el_audit_log` | RF-GRD-05, RF-GRD-06 |
+| B-05 | Validador de nombres exactos contra la story bible | `quality/` | `test_un_nombre_que_no_coincide_con_la_story_bible_es_defecto` | RF-VAL-02 |
+| B-06 | Validador de longitud de capítulo | `quality/` | `test_un_capitulo_fuera_de_rango_es_defecto` | RF-VAL-03 |
+| B-07 | Validador de elementos personalizados obligatorios contra la tabla de hechos | `quality/`, `store/` | `test_un_elemento_obligatorio_ausente_de_todos_los_capitulos_es_defecto` | RF-VAL-04, RF-CFG-07 |
+| B-08 | Registro de validadores: cada uno con nombre y punto de ejecución declarado | `quality/` | `test_cada_validador_declara_nombre_y_punto_de_ejecucion` | RF-VAL-09 |
+
+**Marcha atrás.** Si la normalización produce falsos positivos sobre el corpus congelado, se
+estrecha la lista de transformaciones y se declara qué queda fuera. No se relaja el límite de
+intentos para que «pase igual»: eso convierte el guardarraíl en decorativo.
+
+### 10.4 Fase C · Los tres roles y los dos hooks
+
+| # | Paso | Módulos | Test que lo demuestra | Requisitos |
+| --- | --- | --- | --- | --- |
+| C-01 | Rol **Entrevistador** con su contrato común y su prompt versionado | `agents/entrevistador/` | `test_la_entrevista_recoge_los_siete_campos_del_destinatario` | RF-CFG-01, RF-CFG-02 |
+| C-02 | Detección de datos que faltan | `agents/entrevistador/` | `test_un_brief_incompleto_devuelve_los_huecos_y_no_los_inventa` | RF-CFG-03 |
+| C-03 | Detección de contradicción edad ↔ tono | `agents/entrevistador/`, `quality/` | `test_edad_y_tono_incompatibles_se_devuelven_nombrando_el_par` | RF-CFG-04 |
+| C-04 | Texto libre como contenido no confiable, con extracción de hechos | `agents/entrevistador/` | `test_una_instruccion_en_el_texto_libre_no_altera_el_comportamiento` | RF-CFG-05 |
+| C-05 | Brief validado contra schema antes de entrar al plan | `api/`, `orchestrator/` | `test_un_brief_que_no_valida_no_entra_al_plan` | RF-CFG-06, RF-VAL-01 |
+| C-06 | Rol **Planner** | `agents/planner/`, `orchestrator/` | `test_el_plan_cubre_todos_los_capitulos_declarados_en_el_brief` | RF-HAR-01 |
+| C-07 | Rol **Editor/critic** | `agents/editor/` | `test_el_editor_devuelve_defectos_con_evidencia_citable` | RF-HAR-01 |
+| C-08 | Hook de validación de capítulo | `orchestrator/` | `test_el_hook_de_capitulo_corre_antes_de_aceptarlo` | RF-HAR-04 |
+| C-09 | Hook de policy | `orchestrator/` | `test_el_hook_de_policy_devuelve_el_capitulo_con_palabra_prohibida` | RF-HAR-04, RF-GRD-03 |
+| C-10 | Tools con schema validado y reintentos con límite | `worker/`, `agents/` | `test_una_llamada_a_tool_que_no_valida_es_fallo_de_contrato` | RF-HAR-05, RF-HAR-06 |
+| C-11 | Skill reutilizable commiteada, y `CLAUDE.md` al día | `.claude/skills/`, `CLAUDE.md` | Inspección en revisión | RF-HAR-02, RF-HAR-03 |
+
+**Marcha atrás.** Si el entrevistador necesita más de una contradicción para ser útil, se
+añade **una** más y se anota; el alcance pide «al menos un tipo», y perseguir un catálogo
+completo de contradicciones es alcance que nadie aprobó.
+
+### 10.5 Fase D · Observabilidad
+
+Va antes que la evaluación a propósito: medir sin trazas obliga a repetirlo todo después.
+
+| # | Paso | Módulos | Test que lo demuestra | Requisitos |
+| --- | --- | --- | --- | --- |
+| D-01 | Cliente de Langfuse detrás de un protocolo, con doble sin red | `observability/` | `test_con_langfuse_apagado_la_suite_pasa_entera` | S-02 |
+| D-02 | Una traza por generación, agrupada por sesión de novela | `orchestrator/` | `test_una_generacion_produce_una_traza_con_su_sesion` | RF-OBS-01 |
+| D-03 | Span por rol y por llamada a tool, con nombre identificable | `worker/`, `orchestrator/` | `test_cada_rol_y_cada_tool_aparece_como_span_nombrado` | RF-OBS-02 |
+| D-04 | Tokens, coste y latencia por llamada, capítulo y novela | `observability/` | `test_el_coste_por_novela_es_la_suma_de_sus_llamadas` | RF-OBS-03 |
+| D-05 | Scores de todos los validadores asociados a su traza | `quality/` → `orchestrator/` | `test_cada_validador_envia_su_score_a_su_traza` | RF-OBS-04, RF-VAL-09 |
+| D-06 | Prompts versionados, con la versión registrada en la traza | `agents/`, `observability/` | `test_la_traza_registra_la_version_de_prompt_usada` | RF-OBS-05 |
+
+**Marcha atrás.** Si Langfuse no está disponible en una ejecución, la generación **sigue** y
+la traza se pierde con aviso. Lo contrario —que una novela no se escriba porque el
+observador está caído— convierte la observabilidad en punto único de fallo.
+
+### 10.6 Fase E · Lectura, versiones y PDF
+
+| # | Paso | Módulos | Test que lo demuestra | Requisitos |
+| --- | --- | --- | --- | --- |
+| E-01 | Rutas de lectura en el contrato OpenAPI: novela, capítulo, ficha, versiones | `api/` | `test_el_contrato_publica_las_rutas_de_lectura_con_operation_id` | RF-LEC-01 a RF-LEC-03 |
+| E-02 | Índice de capítulos navegable | `frontend/` | `test_el_indice_lista_los_capitulos_y_navega` | RF-LEC-01 |
+| E-03 | Ficha de personajes y lugares desde la story bible, con enlace al capítulo | `frontend/` | `test_la_ficha_enlaza_cada_personaje_con_su_capitulo` | RF-LEC-02 |
+| E-04 | Portada con dedicatoria personalizada | `frontend/` | `test_la_portada_muestra_la_dedicatoria_del_brief` | RF-LEC-03 |
+| E-05 | Petición de cambio desde la página, seleccionando fragmento o hecho | `frontend/`, `api/` | `test_seleccionar_un_hecho_abre_la_peticion_de_cambio` | RF-LEC-04 |
+| E-06 | Regeneración selectiva: solo los capítulos que usan el hecho | `orchestrator/` | `test_cambiar_un_hecho_regenera_solo_los_capitulos_que_lo_usan` | RF-LEC-05 |
+| E-07 | Versión nueva, versión anterior conservada y capítulos cambiados marcados | `store/`, `frontend/` | `test_la_version_anterior_sigue_legible_tras_regenerar` | RF-LEC-06, RF-LEC-07 |
+| E-08 | Exportación a PDF con índice, ficha, portada y página de novedades | `backend/`, tubería | `test_el_pdf_trae_indice_ficha_portada_y_novedades_con_enlaces` | RF-LEC-08 |
+| E-09 | Validación visual por browser MCP sobre la lectura publicada | tubería, `.claude/mcp.json` | `test_browser_mcp_verifica_indice_ficha_y_portada` | RF-VAL-06 |
+
+**Marcha atrás.** Si la regeneración selectiva rompe la continuidad entre capítulos vecinos,
+no se ensancha el conjunto «por si acaso»: se corrige el registro de uso de A-05, que es
+quien sabe qué capítulos tocan ese hecho, y Lean vuelve a verificar antes de publicar.
+
+### 10.7 Fase F · Verificación formal
+
+El harness tiene que existir antes de especificarlo, y la cronología antes de verificarla.
+
+| # | Paso | Módulos | Test que lo demuestra | Requisitos |
+| --- | --- | --- | --- | --- |
+| F-01 | Generador del fichero Lean desde la story bible en SQLite | `formal/`, `store/` | `test_el_fichero_lean_refleja_la_cronologia_de_sqlite` | RF-LEAN-01 |
+| F-02 | Dos invariantes en Lean: orden temporal y edad coherente con la fecha de nacimiento | `lean/` | `lake build` sobre una cronología sana y sobre una sembrada | RF-LEAN-02, RF-LEAN-03 |
+| F-03 | Lean como puerta previa a publicar, con el fallo devuelto al editor | `orchestrator/` | `test_una_cronologia_incoherente_impide_publicar_y_vuelve_al_editor` | RF-LEAN-04 |
+| F-04 | Especificación TLA+ del flujo: configuración → planificación → escritura → validación → publicación, con reintentos, checkpoint y regeneración | `tla/` | — (se verifica en F-05) | RF-TLA-01 |
+| F-05 | Tres invariantes de seguridad y una propiedad de *liveness*, verificados con TLC sobre 5 capítulos y 2 reintentos | `tla/` | Ejecución de TLC con su `.cfg` commiteado | RF-TLA-02 a RF-TLA-04 |
+| F-06 | Mapa acción ↔ estado del código en el `README`, y contraejemplos documentados | `README.md`, `docs/` | Inspección en revisión | RF-TLA-05, RF-TLA-06 |
+
+**Marcha atrás.** Si TLC encuentra un contraejemplo, **manda el contraejemplo**: se corrige el
+código y se documenta el cambio. Ajustar la especificación para que el modelo pase es
+convertir la verificación formal en decoración, que es justo lo que RF-TLA-05 persigue.
+
+### 10.8 Fase G · Evaluación y entregables
+
+| # | Paso | Módulos | Test que lo demuestra | Requisitos |
+| --- | --- | --- | --- | --- |
+| G-01 | Cinco briefs de prueba, uno con *injection* y uno con incoherencia temporal sembrada | `tests/`, `docs/` | `test_los_cinco_briefs_corren_de_extremo_a_extremo` | RF-EVA-01 |
+| G-02 | Tabla por brief y validador, con lo que pasó y lo que falló | `docs/` | Inspección; la tabla se genera de la ejecución, no a mano | RF-EVA-02 |
+| G-03 | Una iteración de tuning con antes y después, y la versión de prompt de cada resultado | `docs/`, Langfuse | Inspección contra las trazas | RF-EVA-03 |
+| G-04 | Novela de ejemplo de 10 capítulos en `/ejemplos/novela-ejemplo.pdf` | `/ejemplos/` | Existe y abre; 10 capítulos | RF-EVA-04 |
+| G-05 | Los seis documentos de proceso en `docs/` | `docs/` | Inspección | RF-EVA-05 |
+| G-06 | `.claude/` commiteada con memoria, comandos y `mcp.json` de navegador; `.env.example`; cero API keys | `.claude/`, raíz | `test_no_hay_secretos_en_el_arbol` y análisis del historial | RF-EVA-06, RF-EVA-07 |
+| G-07 | Actualizar esta spec con lo construido y cada desviación con su motivo | `specs/` | La puerta *Spec y docs al día* de `AGENTS.md` §10.5 | `AGENTS.md` §10.4 |
+
+### 10.9 Migraciones
+
+**Una: `0002`, en A-03.** Añade siete tablas sobre el esquema de `0001` y no reescribe
+ninguna existente. Si en cualquier fase posterior apareciera la necesidad de una columna
+nueva, no se resuelve en el plan: vuelve a la spec, porque sería alcance que nadie aprobó.
+
+A diferencia de SPEC-001, aquí **no se amplía la migración inicial**: ya hay canon almacenado
+posible y una base creada, así que `0002` se encadena en lugar de reabrir `0001`.
+
+### 10.10 Riesgos del plan y marcha atrás
+
+| Paso | Si no sale | Marcha atrás |
+| --- | --- | --- |
+| A-03 | La migración toca más de lo previsto | Se parte por tabla y cada parte entra con su test. Media tabla aplicada es peor que ninguna |
+| A-05 | El registro de uso por capítulo resulta ambiguo cuando un hecho se usa implícitamente | Se registra solo el uso explícito y se declara el hueco: un registro incompleto es honesto, uno inventado no |
+| B-02 | Los tres niveles se solapan y una palabra global bloquea una novela legítima | La lista por novela puede **añadir** pero no levantar la global; si eso estorba, vuelve a la spec |
+| C-04 | La extracción de hechos del texto libre trae hechos falsos | El texto libre es no confiable por diseño: lo extraído entra como propuesta y pasa por el mismo camino de canonización, nunca directo al canon |
+| D-01 | Langfuse se cae o no hay red | La generación sigue con aviso; la observabilidad no es punto único de fallo |
+| E-06 | La regeneración toca más capítulos de los debidos | Se corrige A-05, no se ensancha el conjunto |
+| F-02 | Los dos invariantes de Lean resultan triviales sobre la cronología real | Se siembra una incoherencia en uno de los cinco briefs de G-01, que es lo que RF-LEAN-05 pide demostrar |
+| F-05 | TLC no termina sobre el modelo pequeño | Se reduce el modelo antes que la propiedad: 3 capítulos y 1 reintento siguen siendo verificación; quitar un invariante no |
+| G-04 | La novela de ejemplo sale corta o incoherente | Es la evidencia de que el sistema funciona: si no sale, el fallo está aguas arriba y se arregla ahí, no maquillando el PDF |
+
+### 10.11 Lo que este plan no cubre
+
+- Todo lo que el apartado 2.2 deja fuera sigue fuera, y en particular los siete opcionales.
+- No fija estimaciones de tiempo. El orden es una dependencia, no un calendario.
+- No decide la librería de PDF, la de schema ni la forma exacta de los prompts: se eligen en
+  su paso y se registran si resultan no triviales.
+- No salta la puerta siguiente. Aunque este plan se apruebe, cada paso empieza por su test en
+  rojo visto fallar por el motivo correcto: un paso que se implementa primero y se cubre
+  después documenta lo que hay, no comprueba lo que se pidió.
