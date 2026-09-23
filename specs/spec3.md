@@ -428,6 +428,20 @@ son deterministas, baratos y son los que pueden parar la línea desde el primer 
 estrecha la lista de transformaciones y se declara qué queda fuera. No se relaja el límite de
 intentos para que «pase igual»: eso convierte el guardarraíl en decorativo.
 
+**Estado: construida el 2026-09-23.** Los ocho pasos cerrados, 279 tests en verde y las
+puertas estáticas limpias. Dos decisiones que el plan dejaba abiertas y aquí quedan fijadas:
+
+| Decisión | Contenido |
+| --- | --- |
+| La lista cerrada de transformaciones de RF-GRD-02, que §5.2 marcaba como *unverifiable* | Minúsculas, sin acentos y sin separadores. **Nada más.** Ni fonética, ni raíz, ni distancia de edición: un falso positivo aquí bloquea un capítulo correcto. El plural se genera sobre el **término vetado** (`-s`, `-es`), no recortando las palabras del texto, porque quitar la `s` final convertiría `mas` en `ma` y empezaría a haber coincidencias que nadie escribió |
+| El límite de reescrituras | Tres, el mismo número que la escalera de reintentos de `architecture.md` §6.3. Al agotarlo la generación se detiene nombrando el término y el intento |
+
+Una desviación: el validador de nombres (RF-VAL-02) **no** exige que el destinatario
+aparezca en el capítulo, solo que cuando aparezca esté bien escrito. Que aparezca en algún
+capítulo lo cobra RF-VAL-04 contra la tabla de hechos. Exigirlo en los dos sitios haría
+fallar todos los capítulos que legítimamente no lo nombran, y dejaría sin decidir cuál de
+los dos validadores manda.
+
 ### 10.4 Fase C · Los tres roles y los dos hooks
 
 | # | Paso | Módulos | Test que lo demuestra | Requisitos |

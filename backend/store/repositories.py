@@ -515,3 +515,133 @@ class CheckpointDeCapitulos:
             if capitulo_id not in hechos:
                 return capitulo_id
         return None
+
+
+@dataclass(frozen=True)
+class TerminoProhibido:
+    """Un termino vetado, con el nivel que lo veto y el ambito al que alcanza."""
+
+    id: str
+    nivel: str
+    termino: str
+    ambito_id: str | None
+    motivo: str = ""
+
+
+@dataclass(frozen=True)
+class ListasProhibidas:
+    """Las tres listas del guardarrail, leidas por ambito.
+
+    El ambito es lo que impide que una palabra vetada por un cliente vete las novelas de
+    todos. El nivel global no lo lleva, y por eso alcanza a todas.
+
+    Cubre RF-GRD-01.
+    """
+
+    conn: sqlite3.Connection
+
+    def anadir(
+        self,
+        identificador: str,
+        *,
+        nivel: str,
+        termino: str,
+        ambito_id: str | None = None,
+        motivo: str = "",
+    ) -> None:
+        self.conn.execute(
+            "INSERT INTO lista_prohibida (id, nivel, termino, ambito_id, motivo) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (identificador, nivel, termino, ambito_id, motivo),
+        )
+
+    def aplicables(
+        self, *, brief_id: str | None = None, destinatario_id: str | None = None
+    ) -> tuple[TerminoProhibido, ...]:
+        """Lo global siempre, mas lo de esta novela y lo de este cliente."""
+        filas = self.conn.execute(
+            """
+            SELECT id, nivel, termino, ambito_id, motivo
+            FROM lista_prohibida
+            WHERE nivel = 'global'
+               OR (nivel = 'novela' AND ambito_id = ?)
+               OR (nivel = 'cliente' AND ambito_id = ?)
+            ORDER BY nivel, termino
+            """,
+            (brief_id, destinatario_id),
+        ).fetchall()
+        return tuple(
+            TerminoProhibido(
+                id=fila["id"],
+                nivel=fila["nivel"],
+                termino=fila["termino"],
+                ambito_id=fila["ambito_id"],
+                motivo=fila["motivo"],
+            )
+            for fila in filas
+        )
+
+
+@dataclass(frozen=True)
+class EntradaDeAudit:
+    """Una decision del policy engine, tal como quedo registrada."""
+
+    id: str
+    ocurrido_en: str
+    decision: str
+    motivo: str
+    ambito: str
+    tarea_id: str | None
+    capitulo_id: str | None
+    termino: str | None
+
+
+@dataclass(frozen=True)
+class AuditLog:
+    """El rastro de las decisiones de politica.
+
+    Solo se escribe y se lee: no hay borrado ni edicion, igual que en
+    `registro_decision`. Una decision de politica que se puede editar despues no sirve
+    como evidencia de nada, que es justo lo que un audit log tiene que ser.
+
+    Cubre RF-GRD-05 y RF-GRD-06.
+    """
+
+    conn: sqlite3.Connection
+
+    def registrar(
+        self,
+        identificador: str,
+        *,
+        decision: str,
+        motivo: str,
+        ambito: str = "",
+        tarea_id: str | None = None,
+        capitulo_id: str | None = None,
+        termino: str | None = None,
+    ) -> None:
+        self.conn.execute(
+            "INSERT INTO audit_log "
+            "(id, ocurrido_en, decision, motivo, ambito, tarea_id, capitulo_id, termino) "
+            "VALUES (?, datetime('now'), ?, ?, ?, ?, ?, ?)",
+            (identificador, decision, motivo, ambito, tarea_id, capitulo_id, termino),
+        )
+
+    def entradas(self) -> tuple[EntradaDeAudit, ...]:
+        filas = self.conn.execute(
+            "SELECT id, ocurrido_en, decision, motivo, ambito, tarea_id, capitulo_id, "
+            "termino FROM audit_log ORDER BY id"
+        ).fetchall()
+        return tuple(
+            EntradaDeAudit(
+                id=fila["id"],
+                ocurrido_en=fila["ocurrido_en"],
+                decision=fila["decision"],
+                motivo=fila["motivo"],
+                ambito=fila["ambito"],
+                tarea_id=fila["tarea_id"],
+                capitulo_id=fila["capitulo_id"],
+                termino=fila["termino"],
+            )
+            for fila in filas
+        )
