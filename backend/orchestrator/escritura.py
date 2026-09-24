@@ -147,11 +147,11 @@ def exigir_con_que_escribir(modo: ModoDeEscritura) -> None:
     el fallo con el tipo de este paquete. La traduccion no es burocracia: es lo que
     permite que quien encola conozca la respuesta sin conocer al cliente de modelo.
     """
-    from backend.worker.modelo import CredencialAusente, exigir_que_se_puede_escribir
+    from backend.worker.modelo import ClaudeCodeAusente, exigir_que_se_puede_escribir
 
     try:
         exigir_que_se_puede_escribir(modo)
-    except CredencialAusente as ausente:
+    except ClaudeCodeAusente as ausente:
         raise NoHayConQueEscribir(str(ausente)) from None
 
 
@@ -253,6 +253,7 @@ def paquete_de_escena(conn: Conexion, escena_id: str, revision_canon: int) -> En
     midan lo mismo (D-09).
     """
     from backend.agents.redactor.redactor import VERSION_DE_PROMPT, prompt_vigente
+    from backend.store.repositories import CatalogoDePredicados
 
     escena = conn.execute(
         """
@@ -290,6 +291,13 @@ def paquete_de_escena(conn: Conexion, escena_id: str, revision_canon: int) -> En
                 f"promesa al lector: {encargo.promesa_al_lector}",
                 f"genero: {encargo.genero}",
                 f"tono: {encargo.tono}",
+                # El catalogo es cerrado: un hecho con otro predicado no se puede
+                # canonizar, asi que el rol tiene que saber cuales hay.
+                "predicados: "
+                + ", ".join(
+                    f"{p.nombre} ({p.descripcion.lower()})"
+                    for p in CatalogoDePredicados(conn).todos()
+                ),
             ]
         ),
     )

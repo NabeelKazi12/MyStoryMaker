@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-VERSION_DE_PROMPT = "1.0.0"
+VERSION_DE_PROMPT = "1.1.0"
 PROMPTS = Path(__file__).parent / "prompts"
 
 
@@ -21,6 +21,9 @@ PROMPTS = Path(__file__).parent / "prompts"
 # version no (RF-WRK-07). Al publicar una version nueva se anade su linea aqui.
 MANIFIESTO = {
     "1.0.0": "b096e2e19ccbd60d811819307e677a8ca6089d4ea1ac85c70006d23d6675ea78",
+    # v1.1.0 no cambia el esquema: lo escribe. La v1.0.0 nunca decia que la prosa va bajo
+    # `## prosa`, y un modelo real que no lo adivinaba fallaba el contrato siempre.
+    "1.1.0": "8cc8ab20c126173278804019a6d520454f0f80ee2b003ee312779dc706f7999c",
 }
 
 
@@ -97,6 +100,11 @@ def parsear(texto: str) -> SalidaDelRedactor:
     """
     if not texto.strip():
         raise SalidaInvalida("la respuesta llego vacia")
+
+    # Las vallas de codigo no son contenido: quitarlas no cambia lo que el rol escribio.
+    texto = "\n".join(
+        linea for linea in texto.splitlines() if not linea.strip().startswith("```")
+    )
 
     if "contexto_insuficiente" in texto.lower():
         falta = tuple(

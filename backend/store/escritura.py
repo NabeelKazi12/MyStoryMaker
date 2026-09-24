@@ -416,3 +416,56 @@ def _motivo(estado: str, puerta: str | None, ausente: str | None) -> str:
             "no se cuenta como evidencia a favor."
         )
     return "No esta aceptado: su puerta encontro defectos y la escena vuelve al Redactor."
+
+
+@dataclass(frozen=True)
+class Portada:
+    """Lo que se ve de una novela antes del capitulo 1, y a quien pertenece."""
+
+    volumen_id: str
+    titulo: str
+    dedicatoria: str
+    brief_id: str | None
+    destinatario_id: str | None
+
+
+@dataclass(frozen=True)
+class Portadas:
+    """Titulo y dedicatoria de una novela (SPEC-006).
+
+    Los dos viven donde ya vivian -`volumen.titulo` y `destinatario.dedicatoria`- para que
+    la lectura, el texto y el PDF los sirvan sin saber que se pueden editar.
+    """
+
+    conn: sqlite3.Connection
+
+    def de(self, volumen_id: str) -> Portada | None:
+        fila = self.conn.execute(
+            """
+            SELECT v.id, v.titulo, v.brief_id, d.id AS destinatario_id, d.dedicatoria
+            FROM volumen v
+            LEFT JOIN destinatario d ON d.brief_id = v.brief_id
+            WHERE v.id = ?
+            LIMIT 1
+            """,
+            (volumen_id,),
+        ).fetchone()
+        if fila is None:
+            return None
+        return Portada(
+            volumen_id=fila["id"],
+            titulo=fila["titulo"],
+            dedicatoria=fila["dedicatoria"] or "",
+            brief_id=fila["brief_id"],
+            destinatario_id=fila["destinatario_id"],
+        )
+
+    def guardar(self, portada: Portada) -> None:
+        self.conn.execute(
+            "UPDATE volumen SET titulo = ? WHERE id = ?", (portada.titulo, portada.volumen_id)
+        )
+        if portada.destinatario_id is not None:
+            self.conn.execute(
+                "UPDATE destinatario SET dedicatoria = ? WHERE id = ?",
+                (portada.dedicatoria, portada.destinatario_id),
+            )

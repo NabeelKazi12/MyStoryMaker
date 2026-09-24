@@ -34,15 +34,15 @@ from backend.store.repositories import CanonVersionado
 from backend.worker.modelo import (
     MAX_TOKENS_REDACCION,
     MODELO_DEL_REDACTOR,
-    VARIABLE_DE_CREDENCIAL,
+    VARIABLE_DEL_EJECUTABLE,
+    ClaudeCodeAusente,
     ClienteFalso,
-    CredencialAusente,
     FalloDeInvocacion,
     Respuesta,
     construir_cliente_real,
 )
 from backend.worker.worker import Worker
-from tests.conftest import material_minimo
+from tests.conftest import CLAUDE_INEXISTENTE, material_minimo
 
 ORDEN = {"ev-1": 10, "ev-2": 20}
 
@@ -91,7 +91,7 @@ def _respuesta(texto: str) -> Respuesta:
 
 @pytest.mark.invariants
 def test_el_prompt_vigente_existe_y_esta_versionado() -> None:
-    assert VERSION_DE_PROMPT == "1.0.0"
+    assert VERSION_DE_PROMPT == "1.1.0"
     assert "Redactor" in prompt_vigente()
 
 
@@ -208,12 +208,12 @@ def test_el_cliente_real_no_arranca_sin_credencial(monkeypatch: pytest.MonkeyPat
     modelos- pero ya no se sostiene negandose a construir el cliente: se sostiene en que un
     modelo inexistente vuelve como fallo de contrato con el mensaje entero del proveedor.
     """
-    monkeypatch.delenv(VARIABLE_DE_CREDENCIAL, raising=False)
+    monkeypatch.setenv(VARIABLE_DEL_EJECUTABLE, CLAUDE_INEXISTENTE)
 
-    with pytest.raises(CredencialAusente) as error:
+    with pytest.raises(ClaudeCodeAusente) as error:
         construir_cliente_real()
 
-    assert VARIABLE_DE_CREDENCIAL in str(error.value)
+    assert VARIABLE_DEL_EJECUTABLE in str(error.value)
 
 
 # --- criterio 1: el bucle completo ---------------------------------------------------

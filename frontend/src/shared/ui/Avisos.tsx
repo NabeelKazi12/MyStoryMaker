@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { Icono } from "./Icono";
 
 export interface Aviso {
   id: string;
@@ -32,16 +33,21 @@ export function ListaDeAvisos({
 }) {
   if (avisos.length === 0) return null;
   return (
-    <section aria-live="polite">
+    <section className="avisos" aria-live="polite" aria-label="Avisos">
       {avisos.map((aviso) => (
         <div className="aviso" key={aviso.id}>
+          <Icono nombre="aviso" tamano={18} />
           <span>{aviso.texto}</span>
-          <button onClick={() => cerrar(aviso.id)} aria-label="cerrar aviso">
-            cerrar
+          <button className="boton-icono" onClick={() => cerrar(aviso.id)} aria-label="Cerrar aviso">
+            <Icono nombre="cerrar" tamano={16} />
           </button>
         </div>
       ))}
-      {avisos.length > 1 && <button onClick={limpiar}>limpiar todo</button>}
+      {avisos.length > 1 ? (
+        <button className="boton secundario limpiar" onClick={limpiar}>
+          Limpiar todo
+        </button>
+      ) : null}
     </section>
   );
 }

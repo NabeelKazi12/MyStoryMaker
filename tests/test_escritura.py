@@ -12,9 +12,12 @@ RF-MOD-01 a RF-MOD-03.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import sqlite3
-from collections.abc import Iterator
+import sys
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
@@ -29,7 +32,8 @@ from backend.agents.planner.planner import (
 from backend.api import main
 from backend.context.presupuesto import Componente
 from backend.domain.vocabularies import EstadoDeBorrador, EstadoDeTarea, ModoDeEscritura
-from backend.orchestrator.apertura import leer_encargo, persistir_apertura
+from backend.orchestrator.admision import Semaforo
+from backend.orchestrator.apertura import esta_abierta, leer_encargo, persistir_apertura
 from backend.orchestrator.encargo import crear_novela_desde_entrevista
 from backend.orchestrator.escritura import encolar_escritura, paquete_de_escena, progreso
 from backend.store import database
@@ -37,12 +41,15 @@ from backend.store.escritura import Borradores, ColaDeTareas, TextoDeLaNovela
 from backend.worker.bucle import Bucle
 from backend.worker.modelo import (
     MODELO_DE_DEMOSTRACION,
-    VARIABLE_DE_CREDENCIAL,
+    MODELO_DEL_REDACTOR,
+    VARIABLE_DEL_EJECUTABLE,
+    ClaudeCodeAusente,
     ClienteDeDemostracion,
-    CredencialAusente,
+    Respuesta,
     construir_cliente,
     construir_cliente_real,
 )
+from tests.conftest import CLAUDE_INEXISTENTE
 
 ENTREVISTA = {
     "nombre": "Marta",
@@ -194,24 +201,24 @@ def _prompt_de_apertura(conn: sqlite3.Connection, volumen_id: str) -> str:
 
 
 @pytest.mark.invariants
-def test_sin_credencial_el_cliente_real_nombra_la_variable(
+def test_sin_claude_code_el_cliente_real_dice_que_falta(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """RF-MOD-01. «No se puede» sin decir que falta obliga a ir a leer el codigo."""
-    monkeypatch.delenv(VARIABLE_DE_CREDENCIAL, raising=False)
+    monkeypatch.setenv(VARIABLE_DEL_EJECUTABLE, CLAUDE_INEXISTENTE)
 
-    with pytest.raises(CredencialAusente) as error:
+    with pytest.raises(ClaudeCodeAusente) as error:
         construir_cliente_real()
 
-    assert VARIABLE_DE_CREDENCIAL in str(error.value)
+    assert VARIABLE_DEL_EJECUTABLE in str(error.value)
     assert "demostracion" in str(error.value)
 
 
 @pytest.mark.invariants
-def test_con_credencial_el_cliente_real_se_construye_sin_invocar(
+def test_con_claude_code_el_cliente_real_se_construye_sin_invocar(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv(VARIABLE_DE_CREDENCIAL, "sk-ant-de-prueba")
+    monkeypatch.setenv(VARIABLE_DEL_EJECUTABLE, sys.executable)
     cliente = construir_cliente(ModoDeEscritura.MODELO)
     assert cliente.modelo != MODELO_DE_DEMOSTRACION
 
@@ -221,9 +228,9 @@ def test_el_modo_modelo_no_cae_en_demostracion_por_su_cuenta(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """D-08. Es la propiedad central de D-18: el modo degradado no se elige solo."""
-    monkeypatch.delenv(VARIABLE_DE_CREDENCIAL, raising=False)
+    monkeypatch.setenv(VARIABLE_DEL_EJECUTABLE, CLAUDE_INEXISTENTE)
 
-    with pytest.raises(CredencialAusente):
+    with pytest.raises(ClaudeCodeAusente):
         construir_cliente(ModoDeEscritura.MODELO)
 
     assert construir_cliente(ModoDeEscritura.DEMOSTRACION).modelo == MODELO_DE_DEMOSTRACION
@@ -481,11 +488,11 @@ def test_pedir_escritura_devuelve_202_y_no_invoca_modelos(cliente_api: TestClien
 
 
 @pytest.mark.invariants
-def test_sin_credencial_el_modo_modelo_devuelve_503_util(
+def test_sin_claude_code_el_modo_modelo_devuelve_503_util(
     cliente_api: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """RF-RUT-03. Y sobre todo: no cae en demostracion por su cuenta."""
-    monkeypatch.delenv(VARIABLE_DE_CREDENCIAL, raising=False)
+    monkeypatch.setenv(VARIABLE_DEL_EJECUTABLE, CLAUDE_INEXISTENTE)
     volumen_id = cliente_api.post(
         "/entrevista", json={"respuestas": ENTREVISTA, "texto_libre": ""}
     ).json()["volumen_id"]
@@ -493,7 +500,7 @@ def test_sin_credencial_el_modo_modelo_devuelve_503_util(
     respuesta = cliente_api.post(f"/novelas/{volumen_id}/escritura", json={"modo": "modelo"})
 
     assert respuesta.status_code == 503
-    assert VARIABLE_DE_CREDENCIAL in respuesta.json()["detail"]
+    assert VARIABLE_DEL_EJECUTABLE in respuesta.json()["detail"]
     assert cliente_api.get(f"/novelas/{volumen_id}/escritura").json()["estado"] == (
         "sin_empezar"
     )
@@ -575,12 +582,12 @@ def _vaciar_la_cola(ruta: Path) -> None:
     """Hace el trabajo que en produccion hace el proceso worker."""
     from backend.worker.__main__ import Servicio
 
-    entorno = os.environ.get(VARIABLE_DE_CREDENCIAL)
+    entorno = os.environ.get(VARIABLE_DEL_EJECUTABLE)
     try:
         Servicio(ruta=str(ruta)).servir(vueltas=100)
     finally:
         if entorno is not None:
-            os.environ[VARIABLE_DE_CREDENCIAL] = entorno
+            os.environ[VARIABLE_DEL_EJECUTABLE] = entorno
 
 
 # --- la lectura del texto, sin pasar por HTTP ------------------------------------------------
@@ -624,3 +631,184 @@ def test_los_hechos_declarados_se_guardan_sin_canonizar(conn: sqlite3.Connection
         (borrador["id"],),
     ).fetchone()["n"]
     assert sin_canonizar > 0
+
+
+# --- el modelo real a traves de Claude Code ----------------------------------------------
+
+
+@dataclass
+class _ClienteGuionizado:
+    """Devuelve lo que se le programa y deja que cada invocacion haga algo mas.
+
+    `durante` corre dentro de `invocar`, que es el momento en que el worker esta esperando
+    al modelo: es donde se mira si la base sigue bloqueada para los demas.
+    """
+
+    textos: list[str]
+    durante: Callable[[], None] | None = None
+    prompts: list[str] = field(default_factory=list)
+
+    @property
+    def modelo(self) -> str:
+        return MODELO_DEL_REDACTOR
+
+    def invocar(self, prompt: str, *, max_tokens: int) -> Respuesta:
+        self.prompts.append(prompt)
+        if self.durante is not None:
+            self.durante()
+        texto = self.textos.pop(0) if self.textos else ""
+        return Respuesta(texto=texto, tokens_entrada=1, tokens_salida=1, modelo=self.modelo)
+
+
+def _apertura_de_demostracion(conn: sqlite3.Connection, volumen_id: str) -> str:
+    return (
+        ClienteDeDemostracion()
+        .invocar(_prompt_de_apertura(conn, volumen_id), max_tokens=4000)
+        .texto
+    )
+
+
+@pytest.mark.invariants
+def test_un_plan_rechazado_vuelve_al_planner_con_el_motivo(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Un «inicio» donde va un numero no tira el encargo: el Planner lo corrige."""
+    monkeypatch.setenv(VARIABLE_DEL_EJECUTABLE, sys.executable)
+    volumen_id = _novela(conn)
+    buena = _apertura_de_demostracion(conn, volumen_id)
+    mala = re.sub(r"\| 10 \| accion \|", "| inicio | accion |", buena, count=1)
+    assert mala != buena
+
+    encolar_escritura(conn, volumen_id, ModoDeEscritura.MODELO)
+    cliente = _ClienteGuionizado(textos=[mala, buena])
+    Bucle(conn=conn, modo=ModoDeEscritura.MODELO, cliente=cliente, semaforo=Semaforo()).una_vuelta()
+
+    assert len(cliente.prompts) == 2
+    assert "'inicio'" in cliente.prompts[1]
+    assert esta_abierta(conn, volumen_id)
+
+
+@pytest.mark.invariants
+def test_la_base_no_queda_bloqueada_mientras_se_espera_al_modelo(
+    conn: sqlite3.Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Guardar una entrevista mientras otra novela se escribe no da «database is locked»."""
+    monkeypatch.setenv(VARIABLE_DEL_EJECUTABLE, sys.executable)
+    volumen_id = _novela(conn)
+    encolar_escritura(conn, volumen_id, ModoDeEscritura.MODELO)
+    conn.commit()
+
+    escrituras: list[str] = []
+
+    def guardar_desde_otro_proceso() -> None:
+        # Espera corta a proposito: si la base sigue bloqueada, se quiere saber ya.
+        otra = sqlite3.connect(tmp_path / "canon.db", timeout=0.2)
+        otra.row_factory = sqlite3.Row
+        otra.execute("PRAGMA foreign_keys=ON")
+        try:
+            creada = crear_novela_desde_entrevista(otra, {**ENTREVISTA, "nombre": "Ines"})
+            otra.commit()
+            escrituras.append(creada.volumen_id)
+        finally:
+            otra.close()
+
+    cliente = _ClienteGuionizado(
+        textos=[_apertura_de_demostracion(conn, volumen_id)],
+        durante=guardar_desde_otro_proceso,
+    )
+    Bucle(conn=conn, modo=ModoDeEscritura.MODELO, cliente=cliente, semaforo=Semaforo()).una_vuelta()
+
+    assert len(escrituras) == 1
+
+
+@pytest.mark.invariants
+def test_la_novela_escrita_se_descarga_en_pdf(cliente_api: TestClient, tmp_path: Path) -> None:
+    volumen_id = cliente_api.post(
+        "/entrevista", json={"respuestas": ENTREVISTA, "texto_libre": ""}
+    ).json()["volumen_id"]
+    cliente_api.post(f"/novelas/{volumen_id}/escritura", json={"modo": "demostracion"})
+    _vaciar_la_cola(tmp_path / "canon.db")
+
+    respuesta = cliente_api.get(f"/novelas/{volumen_id}/pdf")
+
+    assert respuesta.status_code == 200
+    assert respuesta.headers["content-type"] == "application/pdf"
+    assert "attachment" in respuesta.headers["content-disposition"]
+    assert respuesta.content.startswith(b"%PDF")
+
+
+@pytest.mark.invariants
+def test_una_novela_sin_prosa_no_se_descarga(cliente_api: TestClient) -> None:
+    """Un PDF con capitulos vacios pareceria un regalo y no lo seria."""
+    volumen_id = cliente_api.post(
+        "/entrevista", json={"respuestas": ENTREVISTA, "texto_libre": ""}
+    ).json()["volumen_id"]
+
+    respuesta = cliente_api.get(f"/novelas/{volumen_id}/pdf")
+
+    assert respuesta.status_code == 409
+    assert "Escribir la novela" in respuesta.json()["detail"]
+
+
+@pytest.mark.invariants
+def test_un_predicado_fuera_de_catalogo_no_tumba_la_canonizacion(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Se promueve lo que cabe; lo que no, queda como defecto con el hecho de evidencia."""
+    monkeypatch.setenv(VARIABLE_DEL_EJECUTABLE, sys.executable)
+    volumen_id = _novela(conn)
+    apertura = _apertura_de_demostracion(conn, volumen_id)
+    prosa = (
+        "## prosa\n"
+        + "El agua estaba fria y la orilla quedaba lejos, pero siguio nadando. " * 20
+        + "\n\n## hechos_nuevos_detectados\n"
+        "- pe-1 | ubicacion | la orilla\n"
+        "- pe-1 | estado_inicial | miedo\n"
+        "\n## eventos_narrados\n\n## siembras_tocadas\n"
+    )
+    escenas = len(ENTREVISTA["recuerdos"])  # type: ignore[arg-type]
+
+    encolar_escritura(conn, volumen_id, ModoDeEscritura.MODELO)
+    cliente = _ClienteGuionizado(textos=[apertura] + [prosa] * escenas)
+    Bucle(
+        conn=conn, modo=ModoDeEscritura.MODELO, cliente=cliente, semaforo=Semaforo()
+    ).escribir_todo()
+
+    assert progreso(conn, volumen_id).estado == "escrita"
+    fallidas = conn.execute(
+        "SELECT id FROM tarea WHERE id LIKE '%canonizacion' AND estado <> 'aceptada'"
+    ).fetchall()
+    assert fallidas == []
+    anotados = conn.execute(
+        "SELECT evidencia FROM defecto WHERE tipo = 'predicado_fuera_de_catalogo'"
+    ).fetchall()
+    assert len(anotados) == escenas
+    assert all("estado_inicial" in fila["evidencia"] for fila in anotados)
+
+
+@pytest.mark.invariants
+def test_la_extension_del_encargo_se_reparte_entre_las_escenas(
+    conn: sqlite3.Connection,
+) -> None:
+    """Una novela encargada corta no sale cuatro veces mas larga."""
+    volumen_id = _novela(conn, extension=300)
+    encargo = leer_encargo(conn, volumen_id)
+    persistir_apertura(
+        conn,
+        encargo,
+        parsear_apertura(
+            _apertura_de_demostracion(conn, volumen_id),
+            recuerdos_obligatorios=encargo.ids_de_recuerdos,
+        ),
+    )
+
+    presupuestos = {
+        fila["presupuesto_palabras"]
+        for fila in conn.execute(
+            "SELECT e.presupuesto_palabras FROM escena e "
+            "JOIN capitulo c ON c.id = e.capitulo_id WHERE c.volumen_id = ?",
+            (volumen_id,),
+        )
+    }
+    escenas = len(ENTREVISTA["recuerdos"])  # type: ignore[arg-type]
+    assert presupuestos == {max(80, 300 // escenas)}

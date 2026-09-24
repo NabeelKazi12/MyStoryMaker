@@ -28,8 +28,11 @@ cd frontend && npm install
 cd frontend && npm run dev                       # lectura en :5173
 ```
 
-Copia `.env.example` a `.env` y rellena las claves. **En este repositorio no hay ninguna
-clave real**, y `.env` está en `.gitignore`.
+**No hace falta ninguna clave de API.** El worker escribe con Haiku a través de Claude Code
+(`claude -p --model haiku`, sin herramientas) y reutiliza la sesión con la que Claude Code
+ya está autenticado: basta con tenerlo instalado (`npm install -g @anthropic-ai/claude-code`)
+y haber iniciado sesión una vez ejecutando `claude`. Si `claude` no está en el `PATH` del
+worker, su ruta va en `MYSTORYMAKER_CLAUDE` (ver `.env.example`).
 
 ## Cómo se prueba todo junto
 
@@ -79,9 +82,10 @@ curl -X POST http://localhost:8000/novelas/vol-1/cambios -H "Content-Type: appli
 
 El contrato completo, en http://localhost:8000/docs.
 
-**Lo que no vas a ver**, y no es un fallo de la instalación: el cuerpo de los capítulos. La
-generación real necesita el cliente de modelo cableado y credenciales, así que cada capítulo
-muestra que su texto se sirve cuando su borrador está aceptado.
+**«Escribir la novela»** encola la escritura y el worker la va redactando escena a escena
+con Haiku; la lectura se actualiza sola. Cuando hay prosa aparece **«Descargar la novela
+(PDF)»**, que sirve `GET /novelas/{id}/pdf`. Una novela de dos o tres capítulos tarda del
+orden de cinco a diez minutos.
 
 ## Cómo se comprueba
 

@@ -278,6 +278,9 @@ def persistir_apertura(
         lugares=lugares,
         eventos=eventos,
         hechos_requeridos=() if apertura.plan is None else apertura.plan.hechos_requeridos,
+        palabras_por_escena=palabras_por_escena(
+            encargo.extension_objetivo, len(apertura.escenas)
+        ),
     )
 
     return ResultadoDeApertura(
@@ -290,6 +293,25 @@ def persistir_apertura(
     )
 
 
+# Suelo y techo del reparto. Por debajo de 80 palabras no hay escena, hay una frase. El
+# techo sale del de salida de 4.000 tokens (`architecture.md` 4.2): 1.200 palabras en
+# castellano son unos 2.000 tokens, y deja sitio al bloque de hechos sin rozar el truncado.
+PALABRAS_MINIMAS_POR_ESCENA = 80
+PALABRAS_MAXIMAS_POR_ESCENA = 1200
+
+
+def palabras_por_escena(extension_objetivo: int, escenas: int) -> int | None:
+    """Cuanto le toca a cada escena de la extension que pidio el cliente.
+
+    Hasta ahora la extension del encargo no llegaba a ninguna parte: toda escena se pedia
+    a 800 palabras, y una novela encargada corta salia cuatro veces mas larga.
+    """
+    if escenas <= 0 or extension_objetivo <= 0:
+        return None
+    reparto = extension_objetivo // escenas
+    return max(PALABRAS_MINIMAS_POR_ESCENA, min(PALABRAS_MAXIMAS_POR_ESCENA, reparto))
+
+
 def _persistir_escenas(
     conn: Conexion,
     planificadas: Sequence[EscenaPlanificada],
@@ -300,6 +322,7 @@ def _persistir_escenas(
     lugares: dict[str, str],
     eventos: dict[str, str],
     hechos_requeridos: Sequence[str],
+    palabras_por_escena: int | None = None,
 ) -> tuple[str, ...]:
     """Las escenas, numeradas dentro de su capitulo y enlazadas a lo que renderizan."""
     ordinal: dict[int, int] = {}
@@ -312,7 +335,8 @@ def _persistir_escenas(
         conn.execute(
             "INSERT INTO escena (id, capitulo_id, orden, pov_id, lugar_id, "
             "momento_en_historia, objetivo, conflicto, resultado, valor_entrada, "
-            "valor_salida, funcion_en_trama, tipo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "valor_salida, funcion_en_trama, tipo, presupuesto_palabras) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 identificador,
                 capitulos[escena.capitulo_orden],
@@ -327,6 +351,7 @@ def _persistir_escenas(
                 escena.valor_salida,
                 escena.funcion_en_trama.value,
                 escena.tipo.value,
+                palabras_por_escena,
             ),
         )
         conn.execute(

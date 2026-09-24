@@ -39,7 +39,11 @@ from backend.agents.redactor.redactor import (
     parsear,
 )
 from backend.context.ensamblado import Ensamblador, bloqueada_por_presupuesto
-from backend.context.presupuesto import PRESUPUESTO_DE_REDACCION, PresupuestoExcedido
+from backend.context.presupuesto import (
+    PRESUPUESTO_DE_REDACCION,
+    Componente,
+    PresupuestoExcedido,
+)
 from backend.domain.diegetic.canon import Hecho
 from backend.domain.production.ejecucion import Defecto, PaqueteDeContexto, Tarea
 from backend.domain.spec.encargo import Destinatario, ElementoPersonalizado
@@ -84,6 +88,7 @@ from backend.store.escritura import (
 )
 from backend.store.repositories import (
     CanonVersionado,
+    CatalogoDePredicados,
     ResumenesDeCapitulo,
     VersionesDeNovela,
 )
@@ -212,22 +217,48 @@ class Bucle:
         """Le pide al Planner el canon minimo y lo persiste, o para informando."""
         volumen_id = tarea["volumen_id"]
         encargo = leer_encargo(self.conn, volumen_id)
-        ensamblador = paquete_de_apertura(self.conn, volumen_id, self._revision())
+        rechazo = ""
 
-        invocacion = self._invocar(tarea, ensamblador, agente="planner")
-        if invocacion is None:
-            return self._parar(tarea, "no se pudo invocar al Planner")
+        # Un modelo real se equivoca de formato de vez en cuando -un «inicio» donde va un
+        # numero, una columna de menos-. Rechazar la novela entera a la primera por eso es
+        # tirar un encargo bueno, asi que el plan rechazado vuelve al Planner con el motivo
+        # exacto, igual que la prosa vuelve al Redactor con sus defectos.
+        for _ in range(VUELTAS_DE_LA_ESCALERA):
+            ensamblador = paquete_de_apertura(self.conn, volumen_id, self._revision())
+            if rechazo:
+                ensamblador.poner(
+                    Componente.DEFECTOS_ABIERTOS,
+                    "Tu plan anterior se rechazo entero por este motivo: "
+                    f"{rechazo}. Devuelve el plan completo otra vez, corregido, "
+                    "respetando exactamente el formato de cada columna.",
+                )
 
-        try:
-            apertura = parsear_apertura(
-                invocacion.crudo.texto, recuerdos_obligatorios=encargo.ids_de_recuerdos
-            )
-            resultado = persistir_apertura(self.conn, encargo, apertura)
-        except (SalidaInvalidaDelPlanner, AperturaImposible) as error:
-            ColaDeTareas(self.conn).anotar_intento(
-                tarea["id"], clase=ClaseDeFallo.CONTRATO.value, tipo_de_defecto="apertura"
-            )
-            return self._parar(tarea, str(error))
+            invocacion = self._invocar(tarea, ensamblador, agente="planner")
+            if invocacion is None:
+                if self._toca_escalar(tarea["id"]):
+                    return self._parar(tarea, "no se pudo invocar al Planner")
+                continue
+
+            try:
+                apertura = parsear_apertura(
+                    invocacion.crudo.texto, recuerdos_obligatorios=encargo.ids_de_recuerdos
+                )
+                resultado = persistir_apertura(self.conn, encargo, apertura)
+            except AperturaImposible as error:
+                # Rendirse no es un error de formato: reintentar no le da lo que le falta.
+                ColaDeTareas(self.conn).anotar_intento(
+                    tarea["id"], clase=ClaseDeFallo.CONTRATO.value, tipo_de_defecto="apertura"
+                )
+                return self._parar(tarea, str(error))
+            except SalidaInvalidaDelPlanner as error:
+                ColaDeTareas(self.conn).anotar_intento(
+                    tarea["id"], clase=ClaseDeFallo.CONTRATO.value, tipo_de_defecto="apertura"
+                )
+                rechazo = str(error)
+                continue
+            break
+        else:
+            return self._parar(tarea, rechazo or "no se pudo invocar al Planner")
 
         self._aceptar(tarea)
         expandir_plan(self.conn, tarea["plan_id"], self._escenas_de(volumen_id))
@@ -547,6 +578,32 @@ class Bucle:
 
         capitulo_id = self._capitulo_de(escena_id)
         evento = self._evento_de(escena_id)
+        declarados = list(
+            enumerate(borradores.hechos_declarados(borrador["id"]), start=1)
+        )
+        # El catalogo de predicados es cerrado y se amplia por migracion (R-7). Un modelo
+        # real declara a veces predicados que no estan -«estado_inicial», «accion»-, y
+        # meterlos tal cual rompia la canonizacion entera con una violacion de clave
+        # foranea. Se promueve lo que cabe y lo que no queda anotado como defecto, con el
+        # hecho entero como evidencia, en lugar de perderse o de tumbar la escena.
+        catalogo = {predicado.nombre for predicado in CatalogoDePredicados(self.conn).todos()}
+        fuera_de_catalogo = [
+            (numero, hecho) for numero, hecho in declarados if hecho[1] not in catalogo
+        ]
+        Defectos(self.conn).guardar(
+            [
+                Defecto(
+                    id=f"df-{borrador['id']}-predicado-{numero}",
+                    tipo="predicado_fuera_de_catalogo",
+                    severidad=Severidad.BAJA,
+                    regla_violada="todo predicado usado por un Hecho esta en el catalogo",
+                    evidencia=f"{sujeto} | {predicado} | {objeto}",
+                    borrador_id=borrador["id"],
+                )
+                for numero, (sujeto, predicado, objeto) in fuera_de_catalogo
+            ],
+            detectado_por="canonizador",
+        )
         nuevos = [
             Hecho(
                 id=f"he-{borrador['id']}-{numero}",
@@ -555,10 +612,8 @@ class Bucle:
                 objeto=objeto,
                 valido_desde=evento,
             )
-            for numero, (sujeto, predicado, objeto) in enumerate(
-                borradores.hechos_declarados(borrador["id"]), start=1
-            )
-            if evento
+            for numero, (sujeto, predicado, objeto) in declarados
+            if evento and predicado in catalogo
         ]
 
         resultado = Canonizador(self.conn).canonizar(
@@ -689,6 +744,15 @@ class Bucle:
         registro = RegistroDeInvocacion(self.conn)
         registro.guardar_paquete(paquete)
         self.semaforo.admitir(tarea["id"], RESERVA_DE_REDACCION, tarea["prioridad"])
+
+        # Se confirma lo escrito hasta aqui -la tarea `en_curso` y su paquete- antes de
+        # invocar. Una invocacion tarda de segundos a minutos, y mantener abierta la
+        # transaccion de escritura todo ese tiempo bloquea la base para la API: guardar
+        # una entrevista mientras se escribe otra novela acababa en «database is locked».
+        # No rompe RF-STO-06: el artefacto y la transicion que lo acepta se siguen
+        # escribiendo juntos, despues de la invocacion. Y un `en_curso` confirmado es
+        # justo lo que `reanudar_al_arrancar` sabe recuperar si el proceso se cae aqui.
+        self.conn.commit()
 
         crudo = Worker(cliente=self.cliente, agente=agente).invocar(
             tarea["id"], paquete_id, prompt

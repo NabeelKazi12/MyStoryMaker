@@ -13,16 +13,12 @@ evidencia de que el sistema escribe novelas.
 ## `novela-ejemplo.pdf` — falta
 
 Lo que RF-EVA-04 pide: una novela completa de diez capítulos generada con el brief de
-ejemplo del `README`. No está, y el motivo es concreto: `construir_cliente_real()` en
-`backend/worker/modelo.py` sigue sin cablear —es la desviación 1 de SPEC-001— y este
-entorno no tiene credenciales del proveedor.
+ejemplo del `README`. Todavía no está generada. El cliente real ya está cableado
+—invoca a Haiku a través de Claude Code, sin clave de API—, así que generarla es:
 
-Para generarla hacen falta tres cosas, en este orden:
-
-1. Cablear el cliente real del modelo y confirmar el identificador de D-17 contra la
-   Models API.
-2. Poner `ANTHROPIC_API_KEY` en `.env`.
-3. Ejecutar la generación con el brief del `README` y exportar el resultado aquí.
+1. Tener Claude Code instalado y con sesión iniciada.
+2. Ejecutar la generación con el brief del `README` (`.un.ps1`, «Escribir la novela»).
+3. Descargar el PDF desde la lectura y guardarlo aquí.
 
 Poner un PDF con texto inventado en su lugar sería peor que no tenerlo: el fichero existe
 precisamente para demostrar que el sistema funciona de principio a fin, y uno falso

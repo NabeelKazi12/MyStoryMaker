@@ -343,3 +343,24 @@ def test_un_volumen_sabe_de_que_brief_es(base_migrada: Path) -> None:
 
     assert "brief_id" in columnas
     assert "brief" in claves
+
+
+def test_una_conexion_se_puede_cerrar_desde_otro_hilo(tmp_path: Path) -> None:
+    """H-1 de SPEC-005: FastAPI abre la conexion en un hilo y la cierra en otro."""
+    import threading
+
+    conexion = database.abrir(tmp_path / "hilos.db")
+    fallos: list[BaseException] = []
+
+    def usar_y_cerrar() -> None:
+        try:
+            conexion.execute("SELECT 1").fetchone()
+            conexion.commit()
+            conexion.close()
+        except BaseException as error:  # noqa: BLE001 - se comprueba abajo
+            fallos.append(error)
+
+    hilo = threading.Thread(target=usar_y_cerrar)
+    hilo.start()
+    hilo.join()
+    assert fallos == []

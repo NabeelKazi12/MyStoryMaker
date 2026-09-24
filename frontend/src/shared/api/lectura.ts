@@ -182,3 +182,25 @@ export const cerrarEntrevista = (
     method: "POST",
     body: JSON.stringify({ respuestas, texto_libre: textoLibre }),
   });
+
+/** Dónde se descarga la novela en PDF. Es un enlace y no un `fetch`: la descarga la hace
+ *  el navegador, que es quien sabe guardar un fichero. La ruta sigue viviendo aquí para
+ *  que la frontera con el backend esté en un solo sitio. */
+export const urlDelPdf = (volumenId: string) => `/api/novelas/${volumenId}/pdf`;
+
+export interface PortadaGuardada {
+  volumen_id: string;
+  titulo: string;
+  dedicatoria: string;
+}
+
+/** Cambia el título, la dedicatoria o los dos. Lo que no se envía no cambia; los límites
+ *  y los términos vetados los comprueba el backend, que responde `422` con el motivo. */
+export const actualizarPortada = (
+  volumenId: string,
+  cambios: { titulo?: string; dedicatoria?: string },
+) =>
+  pedir<PortadaGuardada>(`/novelas/${volumenId}/portada`, {
+    method: "PATCH",
+    body: JSON.stringify(cambios),
+  });

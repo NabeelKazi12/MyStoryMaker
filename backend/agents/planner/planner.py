@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
@@ -30,7 +31,7 @@ from backend.domain.vocabularies import (
     TipoDeEvento,
 )
 
-VERSION_DE_PROMPT = "1.1.0"
+VERSION_DE_PROMPT = "1.2.0"
 PROMPTS = Path(__file__).parent / "prompts"
 
 
@@ -40,6 +41,9 @@ PROMPTS = Path(__file__).parent / "prompts"
 MANIFIESTO = {
     "1.0.0": "e35f5b786041155820ffb1b76850c394c25d4650aa2149e474a4f3672eb8320d",
     "1.1.0": "1b2011b94a788b9de6424e0e2f949ee3377177e89f293641fe4dbe5fd9c3b930",
+    # v1.2.0 no cambia el esquema: dice el tipo de cada columna y trae un ejemplo, porque
+    # con un modelo real la v1.1.0 recibia «inicio» donde el esquema pide un numero.
+    "1.2.0": "2f5eb97b7d58f6fecb8ed460af1e6676ad351deec2039c6d59face61e291daa9",
 }
 
 
@@ -226,6 +230,11 @@ def parsear_apertura(
     aceptaria -la clave foranea se comprueba, pero el hueco narrativo no- y el fallo
     aparecería tres capitulos despues, cuando ya cuesta invocaciones.
     """
+    # Las vallas de codigo no son contenido: un modelo que envuelve la respuesta en ```
+    # no ha cambiado el plan, y esa linea acabaria leida como un hecho requerido.
+    texto = "\n".join(
+        linea for linea in texto.splitlines() if not linea.strip().startswith("```")
+    )
     if "contexto_insuficiente" in texto.lower():
         falta = tuple(
             linea.strip("- ").strip()
@@ -440,8 +449,11 @@ def _valor[V: Enum](enumeracion: type[V], crudo: str, que: str) -> V:
     Nombrar los permitidos en el mensaje es la diferencia entre corregir el plan de una
     pasada y tener que ir a buscar la enumeracion al codigo.
     """
+    # Mayusculas y tildes no cambian el valor: «Protagónico» es `protagonico`.
+    normalizado = unicodedata.normalize("NFKD", crudo.strip().lower())
+    normalizado = "".join(c for c in normalizado if not unicodedata.combining(c))
     try:
-        return enumeracion(crudo.strip())
+        return enumeracion(normalizado)
     except ValueError:
         permitidos = ", ".join(sorted(str(miembro.value) for miembro in enumeracion))
         raise SalidaInvalidaDelPlanner(

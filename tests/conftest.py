@@ -19,6 +19,20 @@ import pytest
 
 from backend.store import database
 
+# Una ruta que no existe: con ella, `localizar_claude()` responde que no hay Claude Code.
+CLAUDE_INEXISTENTE = str(Path(__file__).parent / "no-existe" / "claude")
+
+
+@pytest.fixture(autouse=True)
+def _sin_claude_code_real(monkeypatch: pytest.MonkeyPatch) -> None:
+    """La suite nunca invoca el Claude Code instalado en la maquina.
+
+    Sin esto, un test que espera «no hay con que escribir» lanzaria de verdad `claude -p`
+    en cualquier maquina donde este instalado: tardaria minutos, gastaria cuota y el
+    resultado dependeria de la sesion de quien corre la suite.
+    """
+    monkeypatch.setenv("MYSTORYMAKER_CLAUDE", CLAUDE_INEXISTENTE)
+
 RAIZ = Path(__file__).resolve().parent.parent
 
 

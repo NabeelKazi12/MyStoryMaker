@@ -136,10 +136,9 @@ class Guardarrail:
         Lanza `LimiteDeReescriturasAgotado` cuando el intento supera el limite y el texto
         sigue sucio.
         """
-        vetados = ListasProhibidas(self.conn).aplicables(
-            brief_id=brief_id, destinatario_id=destinatario_id
+        coincidencias = self.coincidencias(
+            texto, brief_id=brief_id, destinatario_id=destinatario_id
         )
-        coincidencias = tuple(self._buscar(texto, vetados))
 
         if not coincidencias:
             return Veredicto(limpio=True)
@@ -150,6 +149,23 @@ class Guardarrail:
             raise LimiteDeReescriturasAgotado(tuple(c.termino for c in coincidencias), intento)
 
         return Veredicto(limpio=False, coincidencias=coincidencias)
+
+    def coincidencias(
+        self,
+        texto: str,
+        *,
+        brief_id: str | None = None,
+        destinatario_id: str | None = None,
+    ) -> tuple[Coincidencia, ...]:
+        """Lo vetado que aparece en el texto, sin registrar nada.
+
+        Para textos que no son un capitulo -el titulo, la dedicatoria-: alli no hay writer
+        al que devolver nada, y dejar en el audit log un «devolver_al_writer» mentiria.
+        """
+        vetados = ListasProhibidas(self.conn).aplicables(
+            brief_id=brief_id, destinatario_id=destinatario_id
+        )
+        return tuple(self._buscar(texto, vetados))
 
     # --- piezas ----------------------------------------------------------------------
 

@@ -108,6 +108,16 @@ try {
     Escribir "frontend listo"
     Pop-Location
 
+    # El modelo se invoca a traves de Claude Code con Haiku: no hay clave de API que
+    # pedir, pero sin el ejecutable «Escribir la novela» responde 503.
+    $nombreClaude = if ($env:MYSTORYMAKER_CLAUDE) { $env:MYSTORYMAKER_CLAUDE } else { "claude" }
+    $claude = Get-Command $nombreClaude -ErrorAction SilentlyContinue
+    if ($claude) {
+        Escribir "Claude Code listo, modelo haiku ($($claude.Source))"
+    } else {
+        Write-Host "  No se encuentra Claude Code ($nombreClaude) en el PATH." -ForegroundColor Yellow
+    }
+
     # --- 2. Base de datos -------------------------------------------------------------
     Paso "Base de datos"
     Push-Location $raiz
@@ -160,9 +170,10 @@ try {
     Write-Host "http://localhost:$PuertoLectura" -ForegroundColor Green
     Write-Host "  API:   http://localhost:$PuertoApi/docs"
     Write-Host "  Worker: en marcha, consumiendo la cola de tareas." -ForegroundColor DarkGray
-    if (-not $env:ANTHROPIC_API_KEY) {
+    if (-not $claude) {
         Write-Host ""
-        Write-Host "  Sin ANTHROPIC_API_KEY: «Escribir la novela» devolverá 503 diciendo qué falta." -ForegroundColor Yellow
+        Write-Host "  Sin Claude Code: «Escribir la novela» devolverá 503 diciendo qué falta." -ForegroundColor Yellow
+        Write-Host "  Instálalo (npm install -g @anthropic-ai/claude-code) e inicia sesión una vez con «claude»." -ForegroundColor Yellow
         Write-Host "  Para ver el recorrido igualmente, usa «Escribir una muestra» (modo demostración)." -ForegroundColor Yellow
     }
     Write-Host ""

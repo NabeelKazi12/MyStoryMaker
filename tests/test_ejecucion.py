@@ -238,7 +238,7 @@ def test_un_prompt_editado_sin_subir_version_se_detecta(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """El hash cambia y la version no: es justo lo que rompe la reproducibilidad."""
-    monkeypatch.setitem(redactor.MANIFIESTO, "1.0.0", "0" * 64)
+    monkeypatch.setitem(redactor.MANIFIESTO, redactor.VERSION_DE_PROMPT, "0" * 64)
     with pytest.raises(redactor.PromptAlterado) as error:
         redactor.verificar_integridad_del_prompt()
     assert "sin que suba la version" in str(error.value)

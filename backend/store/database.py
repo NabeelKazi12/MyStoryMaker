@@ -29,6 +29,7 @@ Fila = sqlite3.Row
 
 VARIABLE_DE_ENTORNO = "MYSTORYMAKER_DB"
 RUTA_POR_DEFECTO = Path("mystorymaker.db")
+ESPERA_POR_BLOQUEO_S = 30.0
 
 
 def ruta_de_la_base(explicita: str | os.PathLike[str] | None = None) -> Path:
@@ -50,7 +51,18 @@ def abrir(explicita: str | os.PathLike[str] | None = None) -> sqlite3.Connection
     Ninguna otra funcion del sistema debe llamar a `sqlite3.connect`: si los PRAGMA se
     ponen en un solo sitio, no hay forma de olvidarlos en el segundo.
     """
-    conexion = sqlite3.connect(ruta_de_la_base(explicita))
+    # La API y el worker escriben en la misma base desde dos procesos. Con la espera por
+    # defecto de 5 s, una escritura que coincide con otra falla con «database is locked»
+    # en lugar de esperar su turno.
+    #
+    # `check_same_thread=False` porque FastAPI abre la conexion de una peticion en un hilo
+    # de su pool y la usa, confirma o cierra en otro. Con la comprobacion por defecto eso
+    # era un 500 intermitente en cualquier lectura (H-1 de SPEC-005). No abre la puerta a
+    # compartir conexiones: cada una sigue siendo de una sola peticion o de una sola vuelta
+    # del worker, que la usan de principio a fin sin concurrencia.
+    conexion = sqlite3.connect(
+        ruta_de_la_base(explicita), timeout=ESPERA_POR_BLOQUEO_S, check_same_thread=False
+    )
     conexion.row_factory = sqlite3.Row
     conexion.execute("PRAGMA journal_mode=WAL")
     conexion.execute("PRAGMA foreign_keys=ON")

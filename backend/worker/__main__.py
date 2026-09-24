@@ -29,7 +29,7 @@ from backend.orchestrator.ejecucion import reanudar_al_arrancar, registrar_trans
 from backend.store import database
 from backend.store.escritura import ColaDeTareas
 from backend.worker.bucle import Bucle
-from backend.worker.modelo import ClienteDeModelo, CredencialAusente, construir_cliente
+from backend.worker.modelo import ClaudeCodeAusente, ClienteDeModelo, construir_cliente
 
 # Cada cuanto se vuelve a mirar la cola cuando esta vacia. Un segundo es holgado: lo que
 # se espera aqui es que alguien pulse un boton, no un flujo continuo de trabajo.
@@ -75,7 +75,7 @@ class Servicio:
             modo = ModoDeEscritura(siguiente["modo"])
             try:
                 cliente = self.cliente_de(modo)
-            except CredencialAusente as ausente:
+            except ClaudeCodeAusente as ausente:
                 # No se cae al modo de demostracion por su cuenta (D-08): se detiene esa
                 # tarea diciendo exactamente que falta, y el resto de la cola sigue.
                 registrar_transicion(conn, siguiente["id"], EstadoDeTarea.ESCALADA.value)

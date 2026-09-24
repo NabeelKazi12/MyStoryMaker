@@ -23,18 +23,18 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
+import subprocess
+import tempfile
 import time
-import urllib.error
-import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from backend.context.presupuesto import TECHO_DE_SALIDA_REDACCION
 from backend.domain.vocabularies import ClaseDeFallo, ModoDeEscritura
 
-# D-17 (`architecture.md` 5.1), que sustituye a R-1. El identificador sale de una tabla de
-# referencia que este entorno no ha podido contrastar contra la API de modelos: hay que
-# confirmarlo antes de invocar de verdad.
+# D-17 (`architecture.md` 5.1), que sustituye a R-1. Es el nombre canonico que queda en la
+# `Procedencia` cuando Claude Code no informa de otro.
 MODELO_DEL_REDACTOR = "claude-haiku-4-5"
 
 # El nombre que lleva toda `Procedencia` producida sin modelo. Es deliberadamente un
@@ -42,9 +42,25 @@ MODELO_DEL_REDACTOR = "claude-haiku-4-5"
 # columna que mira siempre que ese borrador no salio de ningun proveedor.
 MODELO_DE_DEMOSTRACION = "demostracion"
 
-VARIABLE_DE_CREDENCIAL = "ANTHROPIC_API_KEY"
-URL_DE_MENSAJES = "https://api.anthropic.com/v1/messages"
-VERSION_DE_LA_API = "2023-06-01"
+# El modelo real se invoca a traves de Claude Code, no de la API HTTP: asi el sistema no
+# pide ninguna clave propia y reutiliza la sesion con la que Claude Code ya esta
+# autenticado. `haiku` es el alias de Claude Code para el Haiku vigente.
+MODELO_DE_CLAUDE_CODE = "haiku"
+
+# Por si `claude` no esta en el PATH del proceso que arranca el worker: aqui se puede dar
+# la ruta completa del ejecutable.
+VARIABLE_DEL_EJECUTABLE = "MYSTORYMAKER_CLAUDE"
+
+# Claude Code trae su propio prompt de sistema de asistente de programacion. Se sustituye
+# por uno que lo deja en lo que el sistema necesita: un modelo que contesta en el formato
+# que pide el contrato del rol, sin preambulo.
+PROMPT_DE_SISTEMA = (
+    "Eres el modelo de texto de MyStoryMaker. Responde unicamente con lo que pide el "
+    "mensaje del usuario, en exactamente el formato que su contrato describe: sin "
+    "preambulo, sin comentarios, sin bloques de codigo alrededor y sin explicar lo que "
+    "vas a hacer. Escribe en espanol."
+)
+
 TIMEOUT_DE_INVOCACION_S = 10 * 60
 
 # El techo de salida es el de `architecture.md` 4.2, no uno mayor: con 8.000 la reserva
@@ -73,7 +89,7 @@ class FalloDeInvocacion(Exception):
         super().__init__(f"Invocacion fallida [{clase.value}]: {detalle}")
 
 
-class CredencialAusente(RuntimeError):
+class ClaudeCodeAusente(RuntimeError):
     """No hay con que invocar el modelo, y se dice exactamente que falta y que hacer.
 
     Es su propia excepcion y no un `FalloDeInvocacion` porque no es un fallo de la
@@ -83,12 +99,13 @@ class CredencialAusente(RuntimeError):
 
     def __init__(self) -> None:
         super().__init__(
-            f"No hay credencial del proveedor: la variable de entorno "
-            f"{VARIABLE_DE_CREDENCIAL} no esta puesta. Copia «.env.example» a «.env» y "
-            f"rellenala, o pide explicitamente el modo «demostracion», que escribe prosa "
-            f"determinista sin modelo y la marca como tal. Lo que no ocurre es caer en "
-            f"demostracion en silencio: una novela que nadie sabe que no es del modelo es "
-            f"peor que una novela que no esta escrita."
+            f"No se encuentra Claude Code: el ejecutable «claude» no esta en el PATH del "
+            f"proceso. Instalalo (npm install -g @anthropic-ai/claude-code), inicia sesion "
+            f"una vez con «claude» y vuelve a arrancar, o da su ruta completa en la "
+            f"variable {VARIABLE_DEL_EJECUTABLE}. Tambien puedes pedir explicitamente el "
+            f"modo «demostracion», que escribe prosa determinista sin modelo y la marca "
+            f"como tal. Lo que no ocurre es caer en demostracion en silencio: una novela "
+            f"que nadie sabe que no es del modelo es peor que una novela que no esta escrita."
         )
 
 
@@ -150,81 +167,121 @@ class ClienteFalso:
 
 
 @dataclass
-class ClienteAnthropic:
-    """El proveedor de verdad, sobre HTTP y sin dependencia nueva.
+class ClienteClaudeCode:
+    """El proveedor de verdad: Claude Code en modo no interactivo, con Haiku.
 
-    Es una funcion de red y poco mas, a proposito: toda la politica -reintentos
+    El orquestador del sistema sigue siendo `orchestrator/`; lo que cambia es **quien
+    responde** a cada invocacion. En lugar de hablar HTTP con la API de mensajes -que
+    exige una clave propia-, se lanza `claude -p` y se reutiliza la sesion con la que la
+    persona ya tiene Claude Code autenticado. No hay credencial que copiar a `.env`.
+
+    Se invoca como modelo de texto y nada mas: sin herramientas, sin MCP, sin ajustes de
+    proyecto y sin persistir la sesion. Un Claude Code con herramientas podria leer el
+    repositorio o escribir ficheros en mitad de una escena, y eso no es redactar.
+
+    El prompt viaja por la entrada estandar y no como argumento: un paquete de contexto
+    pasa con holgura del limite de la linea de comandos de Windows.
+
+    Es una funcion de proceso y poco mas, a proposito: toda la politica -reintentos
     narrativos, clasificacion, presupuesto- vive fuera. Lo unico que este objeto decide es
-    como se traduce un fallo de transporte en una de las cuatro clases de D-06.
-
-    Los reintentos de transporte son los del propio transporte (R-2): no hay escalera
-    propia aqui, porque dos capas de reintento multiplican y tres por tres son nueve
-    llamadas pagadas por un corte de red.
+    como se traduce un fallo del proceso en una de las cuatro clases de D-06.
     """
 
-    credencial: str
-    modelo_solicitado: str = MODELO_DEL_REDACTOR
+    ejecutable: str
+    modelo_solicitado: str = MODELO_DE_CLAUDE_CODE
     timeout_s: int = TIMEOUT_DE_INVOCACION_S
 
     @property
     def modelo(self) -> str:
-        return self.modelo_solicitado
+        return MODELO_DEL_REDACTOR
+
+    def argumentos(self) -> list[str]:
+        return [
+            self.ejecutable,
+            "-p",
+            "--model",
+            self.modelo_solicitado,
+            "--output-format",
+            "json",
+            "--tools",
+            "",
+            "--strict-mcp-config",
+            "--setting-sources",
+            "",
+            "--no-session-persistence",
+            "--system-prompt",
+            PROMPT_DE_SISTEMA,
+        ]
 
     def invocar(self, prompt: str, *, max_tokens: int) -> Respuesta:
         comienzo = time.monotonic()
-        cuerpo = json.dumps(
-            {
-                "model": self.modelo_solicitado,
-                "max_tokens": max_tokens,
-                "messages": [{"role": "user", "content": prompt}],
-            }
-        ).encode("utf-8")
-        peticion = urllib.request.Request(
-            URL_DE_MENSAJES,
-            data=cuerpo,
-            headers={
-                "content-type": "application/json",
-                "x-api-key": self.credencial,
-                "anthropic-version": VERSION_DE_LA_API,
-            },
-            method="POST",
-        )
-
+        # Si el worker se arranca desde dentro de otra sesion de Claude Code, estas
+        # variables harian creer al hijo que es una sesion anidada.
+        entorno = {
+            clave: valor
+            for clave, valor in os.environ.items()
+            if clave not in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT")
+        }
         try:
-            with urllib.request.urlopen(peticion, timeout=self.timeout_s) as respuesta:
-                carga: dict[str, Any] = json.loads(respuesta.read().decode("utf-8"))
-        except urllib.error.HTTPError as error:
-            detalle = error.read().decode("utf-8", errors="replace")[:500]
-            # Un 4xx del proveedor no es un corte de red: pedir un modelo que no existe o
-            # un cuerpo mal formado no mejora reintentando, y tratarlo como transporte
-            # gastaria la escalera en algo que nunca va a cambiar.
-            clase = (
-                ClaseDeFallo.CONTRATO if 400 <= error.code < 500 else ClaseDeFallo.TRANSPORTE
+            proceso = subprocess.run(
+                self.argumentos(),
+                input=prompt,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=self.timeout_s,
+                env=entorno,
+                # Fuera del repositorio: que no cargue su CLAUDE.md como instrucciones.
+                cwd=tempfile.gettempdir(),
+                check=False,
             )
+        except subprocess.TimeoutExpired as error:
             raise FalloDeInvocacion(
-                clase, f"el proveedor respondio {error.code}: {detalle}"
+                ClaseDeFallo.TRANSPORTE,
+                f"Claude Code no respondio en {self.timeout_s} s",
             ) from error
-        except (urllib.error.URLError, TimeoutError, OSError) as error:
+        except OSError as error:
             raise FalloDeInvocacion(ClaseDeFallo.TRANSPORTE, str(error)) from error
 
-        texto = "".join(
-            bloque.get("text", "")
-            for bloque in carga.get("content", [])
-            if bloque.get("type") == "text"
-        )
-        uso = carga.get("usage", {})
-        truncada = carga.get("stop_reason") == "max_tokens"
-        if truncada:
+        try:
+            carga: dict[str, Any] = json.loads(proceso.stdout)
+        except json.JSONDecodeError as error:
+            detalle = (proceso.stderr or proceso.stdout).strip()[:500]
+            raise FalloDeInvocacion(
+                ClaseDeFallo.TRANSPORTE,
+                f"Claude Code salio con {proceso.returncode} sin respuesta legible: "
+                f"{detalle}",
+            ) from error
+
+        if carga.get("is_error") or carga.get("subtype") != "success":
+            detalle = str(carga.get("result") or carga.get("subtype") or proceso.stderr)
+            # Un error de la API con estado 4xx no mejora reintentando; el resto -cortes,
+            # sobrecarga, limite de uso momentaneo- si puede.
+            estado = carga.get("api_error_status")
+            clase = (
+                ClaseDeFallo.CONTRATO
+                if isinstance(estado, int) and 400 <= estado < 500 and estado != 429
+                else ClaseDeFallo.TRANSPORTE
+            )
+            raise FalloDeInvocacion(clase, f"Claude Code respondio con error: {detalle[:500]}")
+
+        if carga.get("stop_reason") == "max_tokens":
             raise FalloDeInvocacion(
                 ClaseDeFallo.CONTRATO,
                 f"salida truncada al alcanzar max_tokens={max_tokens}",
             )
 
+        uso = carga.get("usage", {})
+        modelos = list((carga.get("modelUsage") or {}).keys())
         return Respuesta(
-            texto=texto,
-            tokens_entrada=int(uso.get("input_tokens", 0)),
+            texto=str(carga.get("result", "")),
+            tokens_entrada=int(uso.get("input_tokens", 0))
+            + int(uso.get("cache_read_input_tokens", 0))
+            + int(uso.get("cache_creation_input_tokens", 0)),
             tokens_salida=int(uso.get("output_tokens", 0)),
-            modelo=str(carga.get("model", self.modelo_solicitado)),
+            modelo=modelos[0] if modelos else MODELO_DEL_REDACTOR,
+            coste=float(carga.get("total_cost_usd", 0.0) or 0.0),
             latencia_ms=int((time.monotonic() - comienzo) * 1000),
         )
 
@@ -268,21 +325,27 @@ class ClienteDeDemostracion:
 # --- construccion -----------------------------------------------------------------------
 
 
-def construir_cliente_real() -> ClienteDeModelo:
-    """El cliente del proveedor, con los reintentos de transporte del transporte (R-2).
+def localizar_claude() -> str | None:
+    """La ruta del ejecutable de Claude Code, o `None` si no hay.
 
-    No se construye en import time: sin credenciales, importar este modulo debe seguir
-    funcionando para que la suite corra.
-
-    Queda en pie la salvedad de D-17: el identificador del modelo no se ha podido
-    contrastar contra la API de modelos desde este entorno. Viaja tal cual, y si no
-    existiera, el proveedor devolveria un 4xx que se clasifica como fallo de contrato con
-    su mensaje entero, en lugar de reintentarse en bucle.
+    `shutil.which` resuelve tambien el `claude.cmd` que instala npm en Windows.
     """
-    credencial = os.environ.get(VARIABLE_DE_CREDENCIAL, "").strip()
-    if not credencial:
-        raise CredencialAusente()
-    return ClienteAnthropic(credencial=credencial)
+    explicito = os.environ.get(VARIABLE_DEL_EJECUTABLE, "").strip()
+    if explicito:
+        return shutil.which(explicito)
+    return shutil.which("claude")
+
+
+def construir_cliente_real() -> ClienteDeModelo:
+    """El cliente de Claude Code con Haiku.
+
+    No se construye en import time: sin Claude Code instalado, importar este modulo debe
+    seguir funcionando para que la suite corra.
+    """
+    ejecutable = localizar_claude()
+    if ejecutable is None:
+        raise ClaudeCodeAusente()
+    return ClienteClaudeCode(ejecutable=ejecutable)
 
 
 def construir_cliente(modo: ModoDeEscritura) -> ClienteDeModelo:
@@ -296,13 +359,12 @@ def exigir_que_se_puede_escribir(modo: ModoDeEscritura) -> None:
     """Comprueba que el modo se puede servir, sin construir nada que invoque.
 
     Existe para que `api/` pueda decidir el codigo de respuesta sin llegar a tener un
-    cliente de modelo en el proceso web. Saber si hay credencial es configuracion; tener
-    con que invocar es otra cosa, y la frontera entre las dos merece una funcion.
+    cliente de modelo en el proceso web.
     """
     if modo is ModoDeEscritura.DEMOSTRACION:
         return
-    if not os.environ.get(VARIABLE_DE_CREDENCIAL, "").strip():
-        raise CredencialAusente()
+    if localizar_claude() is None:
+        raise ClaudeCodeAusente()
 
 
 def clasificar_excepcion(error: Exception) -> ClaseDeFallo:

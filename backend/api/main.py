@@ -663,6 +663,114 @@ def texto_de_novela(volumen_id: str, conn: Conexion) -> TextoDeNovela:
     )
 
 
+@app.get(
+    "/novelas/{volumen_id}/pdf",
+    operation_id="readPdfDeNovela",
+    response_class=Response,
+    responses={200: {"content": {"application/pdf": {}}}},
+)
+def pdf_de_novela(volumen_id: str, conn: Conexion) -> Response:
+    """La novela escrita como PDF, para guardarla o regalarla.
+
+    Maqueta lo mismo que sirve `/texto` -el ultimo borrador no obsoleto de cada escena-,
+    con la portada y la ficha de `/lectura`. Una novela sin prosa responde `409` en vez
+    de un PDF con capitulos vacios, que pareceria un regalo y no lo seria.
+    """
+    import tempfile
+    from pathlib import Path
+
+    from backend.export.pdf import CapituloParaPDF, NovelaParaPDF, exportar_pdf
+
+    lectura = lectura_de_novela(volumen_id, conn)
+    texto = texto_de_novela(volumen_id, conn)
+    capitulos = tuple(
+        CapituloParaPDF(
+            id=capitulo.id,
+            orden=capitulo.orden,
+            titulo=capitulo.titulo or f"Capitulo {capitulo.orden}",
+            texto="\n\n".join(escena.texto for escena in capitulo.escenas),
+        )
+        for capitulo in texto.capitulos
+        if capitulo.escenas
+    )
+    if not capitulos:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "La novela todavia no tiene prosa escrita. Pulsa «Escribir la novela» y "
+            "descargala cuando termine.",
+        )
+
+    primero = capitulos[0].id
+    novela = NovelaParaPDF(
+        titulo=lectura["titulo"],
+        dedicatoria=lectura["dedicatoria"] or "",
+        destinatario=lectura["destinatario"] or "",
+        personajes=tuple((p["nombre_canonico"], primero) for p in lectura["personajes"]),
+        lugares=tuple((lugar["nombre_canonico"], primero) for lugar in lectura["lugares"]),
+        capitulos=capitulos,
+    )
+    with tempfile.TemporaryDirectory() as carpeta:
+        destino = Path(carpeta) / "novela.pdf"
+        exportar_pdf(novela, destino)
+        contenido = destino.read_bytes()
+
+    # La cabecera solo admite latin-1: el nombre del fichero va en ASCII.
+    nombre = "".join(
+        c if c.isascii() and c.isalnum() else "-" for c in lectura["titulo"]
+    ).strip("-")
+    return Response(
+        content=contenido,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{nombre or volumen_id}.pdf"'
+        },
+    )
+
+
+class PeticionDePortada(BaseModel):
+    """Lo que se quiere cambiar de la portada. Lo que no se envia, no cambia."""
+
+    titulo: str | None = None
+    dedicatoria: str | None = None
+
+
+class PortadaGuardada(BaseModel):
+    volumen_id: str
+    titulo: str
+    dedicatoria: str
+
+
+@app.patch("/novelas/{volumen_id}/portada", operation_id="updatePortada")
+def editar_portada(
+    volumen_id: str, peticion: PeticionDePortada, conn: Conexion
+) -> PortadaGuardada:
+    """Cambia el titulo o la dedicatoria. No toca prosa, canon, tareas ni versiones.
+
+    Los limites y el guardarrail los decide `orchestrator/`; aqui solo se traducen a `422`
+    con su motivo, para que la pantalla lo muestre tal cual.
+    """
+    from backend.orchestrator.portada import (
+        NovelaSinPortada,
+        PortadaInvalida,
+    )
+    from backend.orchestrator.portada import (
+        editar_portada as editar,
+    )
+
+    try:
+        portada = editar(
+            conn, volumen_id, titulo=peticion.titulo, dedicatoria=peticion.dedicatoria
+        )
+    except NovelaSinPortada as ausente:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(ausente)) from None
+    except PortadaInvalida as invalida:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(invalida)) from None
+
+    return PortadaGuardada(
+        volumen_id=portada.volumen_id, titulo=portada.titulo, dedicatoria=portada.dedicatoria
+    )
+
+
 def _exigir_volumen(conn: Conexion, volumen_id: str) -> Any:
     fila = conn.execute(
         "SELECT id, titulo FROM volumen WHERE id = ?", (volumen_id,)
