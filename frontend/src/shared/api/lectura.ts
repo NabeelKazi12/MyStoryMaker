@@ -19,6 +19,16 @@ export interface Lectura {
   capitulos: CapituloDeIndice[];
   personajes: EntidadDeFicha[];
   lugares: EntidadDeFicha[];
+  /** La aprobación vigente, o `null` si la novela está abierta (SPEC-007 RF-APR-09). */
+  aprobacion: Aprobacion | null;
+}
+
+export interface Aprobacion {
+  id: string;
+  version_numero: number;
+  /** `AAAA-MM-DD HH:MM:SS` en UTC, tal como lo guarda el backend. */
+  aprobada_en: string;
+  retirada_en: string | null;
 }
 
 export interface VersionPublicada {
@@ -204,3 +214,132 @@ export const actualizarPortada = (
     method: "PATCH",
     body: JSON.stringify(cambios),
   });
+
+export interface AprobacionRegistrada {
+  volumen_id: string;
+  aprobacion: Aprobacion;
+  /** Escenas cuyo borrador sigue sin aceptar y quedan firmadas tal como están. */
+  sin_aceptar: number;
+}
+
+/** Lo que trae el `409` de aprobar: el motivo y, si la puerta los encontró, los defectos. */
+export interface RechazoDeAprobacion {
+  motivo: string;
+  defectos: { tipo: string; regla_violada: string; evidencia: string }[];
+}
+
+/** Aprueba la novela. Si no se puede —sin terminar, ya aprobada, un defecto de la puerta
+ *  *Volumen cerrado*—, el backend responde `409` y dice por qué. */
+export const aprobarNovela = (volumenId: string) =>
+  pedir<AprobacionRegistrada>(`/novelas/${volumenId}/aprobacion`, { method: "POST" });
+
+/** Reabre la novela: la aprobación queda retirada, no borrada. */
+export const reabrirNovela = (volumenId: string) =>
+  pedir<{ volumen_id: string; aprobacion: Aprobacion }>(
+    `/novelas/${volumenId}/aprobacion/retirada`,
+    { method: "POST" },
+  );
+
+/** Una novela tal como la enseña la biblioteca. Estado, `detalle` y aprobación son los
+ *  mismos que dan `/escritura` y `/lectura`: la biblioteca no los calcula (SPEC-008). */
+export interface NovelaDeBiblioteca {
+  volumen_id: string;
+  titulo: string;
+  destinatario: string;
+  estado: string;
+  detalle: string;
+  capitulos: number;
+  palabras: number;
+  ultima_version_en: string | null;
+  aprobacion: Aprobacion | null;
+}
+
+/** Todas las novelas, la más reciente primero. Sin novelas, lista vacía. */
+export const leerBiblioteca = () => pedir<NovelaDeBiblioteca[]>("/novelas");
+
+export interface NovelaEliminada {
+  volumen_id: string;
+  titulo: string;
+  eliminada_en: string;
+}
+
+/** Retira la novela (SPEC-009): deja de verse en la biblioteca y en todas las rutas, pero
+ *  nada se borra de la base. Aprobada o escribiéndose, el backend responde `409` y dice
+ *  por qué. */
+export const eliminarNovela = (volumenId: string) =>
+  pedir<NovelaEliminada>(`/novelas/${volumenId}`, { method: "DELETE" });
+
+/** Lo que ha costado una novela, leído de SQLite (SPEC-012). La pantalla no suma nada:
+ *  totales y desgloses vienen hechos del backend. */
+export interface TotalDeGasto {
+  coste: number;
+  llamadas: number;
+  fallidas: number;
+  tokens_entrada: number;
+  tokens_salida: number;
+  latencia_ms: number;
+  llamadas_sin_tokens: number;
+}
+
+export interface DesgloseDeGasto {
+  nombre: string;
+  coste: number;
+  llamadas: number;
+}
+
+export interface LlamadaDeGasto {
+  id: string;
+  momento: string;
+  agente: string;
+  modelo: string;
+  version_de_prompt: string;
+  tarea: string;
+  escena_id: string | null;
+  capitulo_orden: number | null;
+  intento: number;
+  coste: number;
+  latencia_ms: number;
+  tokens_entrada: number | null;
+  tokens_salida: number | null;
+  clase_de_fallo: string | null;
+  /** El enlace a su traza en Langfuse, o `null` si Langfuse no está configurado. */
+  traza_url: string | null;
+}
+
+export interface GastosDeNovela {
+  volumen_id: string;
+  moneda: string;
+  langfuse_activo: boolean;
+  total: TotalDeGasto;
+  por_rol: DesgloseDeGasto[];
+  por_capitulo: DesgloseDeGasto[];
+  llamadas: LlamadaDeGasto[];
+}
+
+export const leerGastos = (volumenId: string) =>
+  pedir<GastosDeNovela>(`/novelas/${volumenId}/gastos`);
+
+/** Un personaje declarado antes de escribir (SPEC-011). La persona destinataria va
+ *  primera, siempre protagonista; su nombre y su papel los pone el backend. */
+export type PapelDePersonaje = "protagonico" | "secundario" | "ambiental";
+
+export interface PersonajeDeclarado {
+  nombre: string;
+  papel: PapelDePersonaje;
+  relacion: string;
+  descripcion: string;
+  es_destinatario: boolean;
+}
+
+export const leerPersonajes = (volumenId: string) =>
+  pedir<{ volumen_id: string; personajes: PersonajeDeclarado[] }>(
+    `/novelas/${volumenId}/personajes`,
+  );
+
+/** Reemplaza la lista entera. `422` si un personaje no vale —el backend dice cuál— y
+ *  `409` si la escritura ya empezó o la novela está aprobada. */
+export const guardarPersonajes = (volumenId: string, personajes: PersonajeDeclarado[]) =>
+  pedir<{ volumen_id: string; personajes: PersonajeDeclarado[] }>(
+    `/novelas/${volumenId}/personajes`,
+    { method: "PUT", body: JSON.stringify({ personajes }) },
+  );

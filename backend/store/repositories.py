@@ -24,8 +24,9 @@ from backend.domain.diegetic.canon import (
     Personaje,
     Predicado,
 )
+from backend.domain.discursive.relato import Hilo
 from backend.domain.errors import ErrorDeDominio
-from backend.domain.vocabularies import ExclusividadDePredicado, Relevancia
+from backend.domain.vocabularies import ExclusividadDePredicado, Relevancia, TipoDeHilo
 
 
 @dataclass(frozen=True)
@@ -255,6 +256,62 @@ class ConsultasDeCalidad:
                 id=f["id"],
                 distancia=(f["orden_actual"] or 0) - f["orden_siembra"],
                 distancia_maxima=f["distancia_maxima"],
+            )
+            for f in filas
+        )
+
+    def siembras_abiertas_del_volumen(self, volumen_id: str) -> tuple[SiembraAbierta, ...]:
+        """Las siembras sin pagar de **esta** novela, para el cierre del volumen.
+
+        Acotadas por el capitulo de la escena que siembra: con dos novelas en la base, la
+        siembra abierta de una no puede impedir cerrar la otra (SPEC-007 RF-APR-03).
+        """
+        filas = self.conn.execute(
+            """
+            SELECT sp.id, sp.distancia_maxima, siembra.orden AS orden_siembra,
+                   (SELECT MAX(e.orden) FROM escena e
+                     JOIN capitulo k ON k.id = e.capitulo_id
+                     WHERE k.volumen_id = c.volumen_id) AS orden_actual
+            FROM siembra_pago sp
+            JOIN escena siembra ON siembra.id = sp.escena_siembra
+            JOIN capitulo c ON c.id = siembra.capitulo_id
+            WHERE sp.estado = 'abierto' AND c.volumen_id = ?
+            ORDER BY sp.id
+            """,
+            (volumen_id,),
+        ).fetchall()
+        return tuple(
+            SiembraAbierta(
+                id=f["id"],
+                distancia=(f["orden_actual"] or 0) - f["orden_siembra"],
+                distancia_maxima=f["distancia_maxima"],
+            )
+            for f in filas
+        )
+
+    def hilos_del_volumen(self, volumen_id: str) -> tuple[Hilo, ...]:
+        """Los hilos que recorre alguna escena de esta novela."""
+        filas = self.conn.execute(
+            """
+            SELECT DISTINCT h.id, h.tipo, h.pregunta_dramatica, h.protagonista_id,
+                   h.resuelto_en, h.abandonado
+            FROM hilo h
+            JOIN escena_hilo eh ON eh.hilo_id = h.id
+            JOIN escena e ON e.id = eh.escena_id
+            JOIN capitulo c ON c.id = e.capitulo_id
+            WHERE c.volumen_id = ?
+            ORDER BY h.id
+            """,
+            (volumen_id,),
+        ).fetchall()
+        return tuple(
+            Hilo(
+                id=f["id"],
+                tipo=TipoDeHilo(f["tipo"]),
+                pregunta_dramatica=f["pregunta_dramatica"],
+                protagonista_id=f["protagonista_id"],
+                resuelto_en=f["resuelto_en"],
+                abandonado=bool(f["abandonado"]),
             )
             for f in filas
         )
@@ -740,3 +797,71 @@ class VersionesDeNovela:
             (volumen_id,),
         ).fetchone()
         return None if fila is None else fila["id"]
+
+
+@dataclass(frozen=True)
+class Aprobacion:
+    """La firma de una persona sobre una version publicada de la novela."""
+
+    id: str
+    volumen_id: str
+    version_id: str
+    version_numero: int
+    aprobada_en: str
+    retirada_en: str | None
+
+
+@dataclass(frozen=True)
+class AprobacionesDeVolumen:
+    """Las aprobaciones de cada novela: se registran y se retiran, nunca se borran.
+
+    Que no se borren no depende de este repositorio: lo impide un trigger de la migracion
+    `0005`, y que haya una sola vigente, un indice unico parcial. Aqui solo se escribe lo
+    que la base ya acepta.
+
+    Cubre RF-APR-05 a RF-APR-07 de SPEC-007.
+    """
+
+    conn: sqlite3.Connection
+
+    def registrar(self, identificador: str, *, volumen_id: str, version_id: str) -> Aprobacion:
+        self.conn.execute(
+            "INSERT INTO aprobacion_de_volumen (id, volumen_id, version_id, aprobada_en) "
+            "VALUES (?, ?, ?, datetime('now'))",
+            (identificador, volumen_id, version_id),
+        )
+        return self._de(identificador)
+
+    def retirar(self, identificador: str) -> Aprobacion:
+        self.conn.execute(
+            "UPDATE aprobacion_de_volumen SET retirada_en = datetime('now') "
+            "WHERE id = ? AND retirada_en IS NULL",
+            (identificador,),
+        )
+        return self._de(identificador)
+
+    def vigente(self, volumen_id: str) -> Aprobacion | None:
+        fila = self.conn.execute(
+            "SELECT id FROM aprobacion_de_volumen WHERE volumen_id = ? AND retirada_en IS NULL",
+            (volumen_id,),
+        ).fetchone()
+        return None if fila is None else self._de(fila["id"])
+
+    def _de(self, identificador: str) -> Aprobacion:
+        fila = self.conn.execute(
+            """
+            SELECT a.id, a.volumen_id, a.version_id, v.numero, a.aprobada_en, a.retirada_en
+            FROM aprobacion_de_volumen a
+            JOIN version_novela v ON v.id = a.version_id
+            WHERE a.id = ?
+            """,
+            (identificador,),
+        ).fetchone()
+        return Aprobacion(
+            id=fila["id"],
+            volumen_id=fila["volumen_id"],
+            version_id=fila["version_id"],
+            version_numero=int(fila["numero"]),
+            aprobada_en=fila["aprobada_en"],
+            retirada_en=fila["retirada_en"],
+        )

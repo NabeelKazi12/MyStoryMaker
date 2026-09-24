@@ -137,6 +137,7 @@ class Worker:
                 respuesta.coste,
                 int((time.monotonic() - comienzo) * 1000),
                 None,
+                tokens=(respuesta.tokens_entrada, respuesta.tokens_salida),
             ),
             texto=respuesta.texto,
         )
@@ -172,7 +173,13 @@ class Worker:
         )
 
     def _procedencia(
-        self, paquete_id: str, coste: float, latencia_ms: int, clase: ClaseDeFallo | None
+        self,
+        paquete_id: str,
+        coste: float,
+        latencia_ms: int,
+        clase: ClaseDeFallo | None,
+        *,
+        tokens: tuple[int, int] | None = None,
     ) -> Procedencia:
         """Toda invocacion registra procedencia, incluidas las que fallan (RF-WRK-03).
 
@@ -193,4 +200,7 @@ class Worker:
             coste=coste,
             latencia_ms=latencia_ms,
             clase_de_fallo=clase,
+            # Sin respuesta no hay tokens que contar: `None`, no cero (SPEC-012 RF-GAS-02).
+            tokens_entrada=None if tokens is None else tokens[0],
+            tokens_salida=None if tokens is None else tokens[1],
         )

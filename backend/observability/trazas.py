@@ -73,6 +73,9 @@ class Span:
     latencia_ms: int = 0
     uso: Uso | None = None
     error: str | None = None
+    # El modelo que respondio y lo que situa la llamada en la novela (SPEC-012 RF-LAN-02).
+    modelo: str | None = None
+    metadatos: Mapping[str, str] = field(default_factory=dict)
 
     def registrar_uso(self, uso: Uso) -> None:
         """Anota lo que consumio este tramo."""

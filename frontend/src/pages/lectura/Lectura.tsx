@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   actualizarPortada,
+  aprobarNovela,
+  eliminarNovela,
   ErrorDeLectura,
   escribirNovela,
   leerCapitulosDeVersion,
@@ -9,10 +11,13 @@ import {
   leerTexto,
   leerVersiones,
   pedirCambio,
+  reabrirNovela,
+  type Aprobacion,
   type CapituloDeVersion,
   type Lectura as DatosDeLectura,
   type ModoDeEscritura,
   type ProgresoDeEscritura,
+  type RechazoDeAprobacion,
   type TextoDeNovela,
   type VersionPublicada,
 } from "../../shared/api/lectura";
@@ -25,6 +30,7 @@ import { Panel } from "../../shared/ui/Panel";
 import { CapituloLeido } from "./CapituloLeido";
 import { enCurso, minutosDeLectura } from "./enCurso";
 import { MenuAjustes } from "./MenuAjustes";
+import { PanelDeGastos } from "./PanelDeGastos";
 import { Taller } from "./Taller";
 
 type Estado =
@@ -37,7 +43,20 @@ type Estado =
       cambiados: string[];
     };
 
-type NombreDePanel = "indice" | "ficha" | "taller";
+type NombreDePanel = "indice" | "ficha" | "taller" | "gastos";
+
+/** Por qué algo está desactivado con la novela aprobada. Es guía de pantalla: si alguien
+ *  lo intenta igual, el `409` del backend es el que manda (SPEC-007 RF-APR-08). */
+const BLOQUEADA_POR_APROBACION =
+  "La novela está aprobada: reábrela desde el Taller para cambiarla.";
+
+/** `AAAA-MM-DD HH:MM:SS` en UTC, como lo guarda el backend, a una fecha legible. */
+function fechaDeAprobacion(aprobacion: Aprobacion): string {
+  const fecha = new Date(`${aprobacion.aprobada_en.replace(" ", "T")}Z`);
+  return Number.isNaN(fecha.getTime())
+    ? aprobacion.aprobada_en
+    : fecha.toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
+}
 
 /** Cada cuánto se vuelve a preguntar por el progreso mientras se escribe.
  *
@@ -53,12 +72,19 @@ const CADA_CUANTO_MS = 2000;
  *  personajes y lugares y el taller de escritura. */
 export function Lectura({
   volumenId,
-  alVolver,
+  alBiblioteca,
+  alNueva,
+  alEliminada,
   ajustes,
   cambiarAjustes,
 }: {
   volumenId: string;
-  alVolver?: () => void;
+  /** Vuelve a la estantería de novelas (SPEC-008). */
+  alBiblioteca: () => void;
+  /** Abre la entrevista de una novela nueva. */
+  alNueva: () => void;
+  /** La novela se ha eliminado: quien la abrió decide a dónde se vuelve (SPEC-009). */
+  alEliminada: (titulo: string) => void;
   ajustes: AjustesDeLectura;
   cambiarAjustes: (parcial: Partial<AjustesDeLectura>) => void;
 }) {
@@ -84,6 +110,13 @@ export function Lectura({
   const [leido, setLeido] = useState(0);
   // Sube con cada «Reintentar» y vuelve a lanzar la lectura inicial.
   const [intento, setIntento] = useState(0);
+  // El diálogo de firma abierto, si hay alguno: aprobar o reabrir (SPEC-007).
+  const [confirmando, setConfirmando] = useState<"aprobar" | "reabrir" | null>(null);
+  const [firmando, setFirmando] = useState(false);
+  // La confirmación de eliminar pide escribir el título (SPEC-009 RF-LEC-18).
+  const [eliminando, setEliminando] = useState(false);
+  const [tituloEscrito, setTituloEscrito] = useState("");
+  const [borrando, setBorrando] = useState(false);
 
   useEffect(() => {
     vigente.current = true;
@@ -257,6 +290,73 @@ export function Lectura({
     }
   }
 
+  /** Pone la aprobación nueva —o `null`— en los datos de la lectura, sin recargar. */
+  function ponerAprobacion(aprobacion: Aprobacion | null) {
+    setEstado((previo) =>
+      previo.fase === "lista" ? { ...previo, datos: { ...previo.datos, aprobacion } } : previo,
+    );
+  }
+
+  async function abrirAprobacion() {
+    // Las versiones se vuelven a pedir: la que se firma es la última publicada, y puede
+    // haberse publicado después de abrir la lectura.
+    try {
+      const versiones = await leerVersiones(volumenId);
+      setEstado((previo) => (previo.fase === "lista" ? { ...previo, versiones } : previo));
+    } catch {
+      // Si falla, el diálogo enseña la que ya había: aprobar lo decide el backend igual.
+    }
+    setConfirmando("aprobar");
+  }
+
+  async function firmar() {
+    setFirmando(true);
+    try {
+      if (confirmando === "aprobar") {
+        const registrada = await aprobarNovela(volumenId);
+        ponerAprobacion(registrada.aprobacion);
+        anadir(
+          `Novela aprobada sobre la versión ${registrada.aprobacion.version_numero}.` +
+            (registrada.sin_aceptar > 0
+              ? ` ${registrada.sin_aceptar} escena(s) quedan firmadas con el borrador sin aceptar.`
+              : ""),
+        );
+      } else {
+        const reabierta = await reabrirNovela(volumenId);
+        ponerAprobacion(null);
+        anadir(
+          `Novela reabierta: la versión ${reabierta.aprobacion.version_numero} deja de estar aprobada y se puede volver a cambiar.`,
+        );
+      }
+    } catch (error) {
+      anadir(motivoDelRechazo(error));
+    } finally {
+      if (vigente.current) {
+        setFirmando(false);
+        setConfirmando(null);
+      }
+    }
+  }
+
+  async function confirmarEliminacion() {
+    setBorrando(true);
+    try {
+      const retirada = await eliminarNovela(volumenId);
+      setEliminando(false);
+      alEliminada(retirada.titulo);
+    } catch (error) {
+      // Un `409` o un `404` se enseña aquí mismo y no se sale de la lectura (RF-LEC-19).
+      anadir(
+        error instanceof ErrorDeLectura
+          ? `No se ha eliminado: ${String(error.detalle ?? error.message)}`
+          : String(error),
+      );
+      if (vigente.current) setEliminando(false);
+    } finally {
+      if (vigente.current) setBorrando(false);
+    }
+  }
+
   async function enviarCambio() {
     if (!cambio || !descripcion.trim()) return;
     const hechoId = cambio.id;
@@ -300,11 +400,9 @@ export function Lectura({
           >
             Reintentar
           </button>
-          {alVolver ? (
-            <button className="boton secundario" onClick={alVolver}>
-              <Icono nombre="volver" tamano={16} /> Volver a la entrevista
-            </button>
-          ) : null}
+          <button className="boton secundario" onClick={alBiblioteca}>
+            <Icono nombre="volver" tamano={16} /> Volver a la biblioteca
+          </button>
         </div>
       </div>
     );
@@ -315,6 +413,13 @@ export function Lectura({
   const hayProsa = texto !== null && texto.palabras > 0;
   const tituloDe = (indice: number) =>
     escritos.get(capitulos[indice].id)?.titulo || `Capítulo ${capitulos[indice].orden}`;
+
+  const aprobacion = datos.aprobacion ?? null;
+  const sinAceptar = (texto?.capitulos ?? []).reduce(
+    (cuenta, capitulo) => cuenta + capitulo.escenas.filter((e) => !e.aceptado).length,
+    0,
+  );
+  const ultimaVersion = versiones.length > 0 ? versiones[versiones.length - 1] : null;
 
   const ultimoId = recordarValor<string | null>(claveDeCapitulo, null);
   const ultimo = capitulos.findIndex((c) => c.id === ultimoId);
@@ -328,6 +433,14 @@ export function Lectura({
     <div className="lector">
       <header className="barra-superior">
         <div className="barra-grupo">
+          <button
+            className="boton-icono"
+            onClick={alBiblioteca}
+            aria-label="Biblioteca"
+            title="Volver a la biblioteca"
+          >
+            <Icono nombre="estante" />
+          </button>
           <button className="boton-icono" onClick={() => alternar("indice")} aria-label="Índice" aria-pressed={panel === "indice"} title="Índice">
             <Icono nombre="indice" />
           </button>
@@ -346,6 +459,12 @@ export function Lectura({
         </div>
 
         <div className="barra-grupo derecha">
+          {aprobacion ? (
+            <button className="sello-aprobada" onClick={() => alternar("taller")} title="Novela aprobada">
+              <Icono nombre="sello" tamano={14} />
+              Aprobada · v{aprobacion.version_numero}
+            </button>
+          ) : null}
           {escribiendo && progreso ? (
             <button className="chip-escribiendo" onClick={() => alternar("taller")}>
               <span className="punto-vivo" aria-hidden="true" />
@@ -367,6 +486,9 @@ export function Lectura({
             </button>
             {menuAbierto ? <MenuAjustes ajustes={ajustes} cambiar={cambiarAjustes} /> : null}
           </div>
+          <button className="boton-icono" onClick={() => alternar("gastos")} aria-label="Gastos" aria-pressed={panel === "gastos"} title="Gastos">
+            <Icono nombre="gastos" />
+          </button>
           <button className="boton-icono" onClick={() => alternar("ficha")} aria-label="Quién es quién" aria-pressed={panel === "ficha"} title="Quién es quién">
             <Icono nombre="ficha" />
           </button>
@@ -403,6 +525,13 @@ export function Lectura({
               <span className="ornamento" aria-hidden="true">❦</span>
             </div>
 
+            {aprobacion ? (
+              <p className="sello-cubierta">
+                <Icono nombre="sello" tamano={16} />
+                Aprobada · versión {aprobacion.version_numero} · {fechaDeAprobacion(aprobacion)}
+              </p>
+            ) : null}
+
             <dl className="cubierta-datos">
               <div>
                 <dt>Capítulos</dt>
@@ -434,7 +563,7 @@ export function Lectura({
                   <Icono nombre="siguiente" tamano={18} />
                 </button>
               )}
-              {!hayProsa && !escribiendo ? (
+              {!hayProsa && !escribiendo && !aprobacion ? (
                 <button className="boton secundario grande" onClick={() => setPanel("taller")}>
                   <Icono nombre="taller" tamano={18} /> Escribir la novela
                 </button>
@@ -496,10 +625,11 @@ export function Lectura({
                   <span>{tituloDe(actual + 1)}</span>
                 </button>
               ) : (
-                <div className="tarjeta-paso fin">
-                  <span className="antetitulo">Fin</span>
-                  <span>Has llegado al último capítulo.</span>
-                </div>
+                <FinDeLaNovela
+                  aprobacion={aprobacion}
+                  progreso={progreso}
+                  alAprobar={() => void abrirAprobacion()}
+                />
               )}
             </nav>
           </>
@@ -548,6 +678,9 @@ export function Lectura({
             Lugares <span className="contador">{datos.lugares.length}</span>
           </button>
         </div>
+        {aprobacion && pestanaFicha === "personajes" ? (
+          <p className="nota-bloqueo">{BLOQUEADA_POR_APROBACION}</p>
+        ) : null}
         {(pestanaFicha === "personajes" ? datos.personajes : datos.lugares).length === 0 ? (
           <p className="vacio">La ficha se llena cuando la novela abre su canon.</p>
         ) : (
@@ -572,7 +705,12 @@ export function Lectura({
                       </button>
                     ) : null}
                     {pestanaFicha === "personajes" ? (
-                      <button className="enlace" onClick={() => setCambio({ id: entidad.id, nombre: entidad.nombre_canonico })}>
+                      <button
+                        className="enlace"
+                        disabled={aprobacion !== null}
+                        title={aprobacion ? BLOQUEADA_POR_APROBACION : undefined}
+                        onClick={() => setCambio({ id: entidad.id, nombre: entidad.nombre_canonico })}
+                      >
                         Pedir un cambio
                       </button>
                     ) : null}
@@ -584,6 +722,11 @@ export function Lectura({
         )}
       </Panel>
 
+      <Panel titulo="Gastos" lado="derecha" ancho abierto={panel === "gastos"} alCerrar={cerrarPanel}>
+        {/* Se vuelve a pedir cada vez que el sondeo trae una escena más (RF-LEC-23). */}
+        <PanelDeGastos volumenId={volumenId} refresco={progreso?.escritas ?? 0} />
+      </Panel>
+
       <Panel titulo="Taller" lado="derecha" abierto={panel === "taller"} alCerrar={cerrarPanel}>
         <Taller
           volumenId={volumenId}
@@ -592,13 +735,20 @@ export function Lectura({
           encargando={encargando}
           alEncargar={(modo) => void encargar(modo)}
           versiones={versiones}
-          alVolver={alVolver}
+          alNueva={alNueva}
           portada={{
             titulo: datos.titulo,
             dedicatoria: datos.dedicatoria,
             destinatario: datos.destinatario,
           }}
           alGuardarPortada={guardarPortada}
+          aprobacion={aprobacion}
+          bloqueo={BLOQUEADA_POR_APROBACION}
+          alReabrir={() => setConfirmando("reabrir")}
+          alEliminar={() => {
+            setTituloEscrito("");
+            setEliminando(true);
+          }}
         />
       </Panel>
 
@@ -625,6 +775,185 @@ export function Lectura({
           </div>
         </form>
       </Dialogo>
+
+      <Dialogo
+        titulo={confirmando === "reabrir" ? "Reabrir la novela" : "Aprobar la novela"}
+        abierto={confirmando !== null}
+        alCerrar={() => {
+          if (!firmando) setConfirmando(null);
+        }}
+      >
+        <div className="dialogo-cuerpo">
+          {confirmando === "aprobar" ? (
+            <>
+              <p className="dialogo-texto">
+                Vas a firmar <strong>{datos.titulo}</strong> tal como está. Con tu firma se
+                cierra el volumen, y la novela deja de poder reescribirse, cambiarse o
+                retitularse hasta que la reabras.
+              </p>
+              <dl className="resumen-firma">
+                <div>
+                  <dt>Versión</dt>
+                  <dd>{ultimaVersion ? `v${ultimaVersion.numero}` : "—"}</dd>
+                </div>
+                <div>
+                  <dt>Capítulos</dt>
+                  <dd>{total}</dd>
+                </div>
+                <div>
+                  <dt>Palabras</dt>
+                  <dd>{texto ? texto.palabras.toLocaleString("es-ES") : "—"}</dd>
+                </div>
+              </dl>
+              {sinAceptar > 0 ? (
+                <p className="aviso aviso-en-linea">
+                  <Icono nombre="aviso" tamano={18} />
+                  <span>
+                    <strong>{sinAceptar} escena(s)</strong> tienen el borrador sin aceptar: las
+                    comprobaciones automáticas no pudieron darlas por buenas, y quedan firmadas
+                    tal como están.
+                  </span>
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <p className="dialogo-texto">
+              La aprobación de la versión {aprobacion?.version_numero} se retira —queda en el
+              historial— y la novela vuelve a poder reescribirse, cambiarse y retitularse. Para
+              darla por buena otra vez habrá que volver a aprobarla.
+            </p>
+          )}
+          <div className="dialogo-acciones">
+            <button
+              type="button"
+              className="boton fantasma"
+              disabled={firmando}
+              onClick={() => setConfirmando(null)}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="boton principal"
+              disabled={firmando}
+              onClick={() => void firmar()}
+              autoFocus
+            >
+              <Icono nombre={confirmando === "reabrir" ? "volver" : "sello"} tamano={16} />
+              {firmando
+                ? "Un momento…"
+                : confirmando === "reabrir"
+                  ? "Reabrir la novela"
+                  : "Aprobar la novela"}
+            </button>
+          </div>
+        </div>
+      </Dialogo>
+
+      <Dialogo
+        titulo="Eliminar esta novela"
+        abierto={eliminando}
+        alCerrar={() => {
+          if (!borrando) setEliminando(false);
+        }}
+      >
+        <form
+          className="dialogo-cuerpo"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (tituloEscrito.trim() === datos.titulo.trim()) void confirmarEliminacion();
+          }}
+        >
+          <p className="dialogo-texto">
+            <strong>{datos.titulo}</strong> desaparecerá de la biblioteca y ya no se podrá
+            abrir. Esto no se puede deshacer desde aquí.
+          </p>
+          <label className="campo">
+            <span>Escribe el título para confirmar</span>
+            <input
+              value={tituloEscrito}
+              onChange={(e) => setTituloEscrito(e.target.value)}
+              placeholder={datos.titulo}
+              autoComplete="off"
+              autoFocus
+            />
+          </label>
+          <div className="dialogo-acciones">
+            <button
+              type="button"
+              className="boton fantasma"
+              disabled={borrando}
+              onClick={() => setEliminando(false)}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="boton peligro"
+              disabled={borrando || tituloEscrito.trim() !== datos.titulo.trim()}
+            >
+              <Icono nombre="papelera" tamano={16} />
+              {borrando ? "Eliminando…" : "Eliminar"}
+            </button>
+          </div>
+        </form>
+      </Dialogo>
     </div>
   );
+}
+
+/** El final de la lectura: donde se firma la novela.
+ *
+ *  El botón aparece cuando el backend dice que la escritura está `escrita`; si no, se
+ *  enseña su explicación. Si aprobar procede o no lo decide la ruta (RF-CON-04). */
+function FinDeLaNovela({
+  aprobacion,
+  progreso,
+  alAprobar,
+}: {
+  aprobacion: Aprobacion | null;
+  progreso: ProgresoDeEscritura | null;
+  alAprobar: () => void;
+}) {
+  if (aprobacion) {
+    return (
+      <div className="tarjeta-paso fin aprobada">
+        <span className="antetitulo">
+          <Icono nombre="sello" tamano={14} /> Fin · Aprobada
+        </span>
+        <span>
+          Versión {aprobacion.version_numero}, aprobada el {fechaDeAprobacion(aprobacion)}.
+        </span>
+      </div>
+    );
+  }
+  if (progreso?.estado === "escrita") {
+    return (
+      <div className="tarjeta-paso fin firmable">
+        <span className="antetitulo">Fin</span>
+        <span>¿Es la novela que querías regalar?</span>
+        <button className="boton principal" onClick={alAprobar}>
+          <Icono nombre="sello" tamano={16} /> Aprobar la novela
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="tarjeta-paso fin">
+      <span className="antetitulo">Fin</span>
+      <span>{progreso?.detalle ?? "Has llegado al último capítulo."}</span>
+    </div>
+  );
+}
+
+/** El texto de un rechazo tal como lo redacta el backend, defectos incluidos. */
+function motivoDelRechazo(error: unknown): string {
+  if (!(error instanceof ErrorDeLectura)) return String(error);
+  const detalle = error.detalle as RechazoDeAprobacion | string | undefined;
+  if (typeof detalle === "string") return `No se ha podido: ${detalle}`;
+  if (detalle && typeof detalle === "object" && "motivo" in detalle) {
+    const defectos = detalle.defectos.map((d) => d.evidencia).join("; ");
+    return `No se ha aprobado: ${detalle.motivo}${defectos ? ` — ${defectos}` : ""}`;
+  }
+  return error.message;
 }

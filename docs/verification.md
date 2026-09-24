@@ -260,6 +260,13 @@ dice qué dimensiones de §4 se cobran en cada una.
 | Acto cerrado | Fin de acto | Curva de tensión, hilos inactivos, conformidad de beats, frecuencia de motivos, más los indicadores adelantados de abajo | Advertencia | No aplica: no bloquea |
 | Volumen cerrado | Final | Siembras sin pagar, hilos resueltos, preguntas dramáticas respondidas, arcos con estado terminal, promesa al lector | Bloqueante | 0: lo que llega aquí se inspecciona a mano |
 
+*Volumen cerrado* se evalúa al aprobar la novela (SPEC-007): la firma de la persona es
+la evidencia `humano` de *promesa al lector* (D-22) y no levanta ningún defecto
+determinista. En v1 la ruta cobra siembras sin pagar y que todo hilo declare su pregunta
+dramática; hilos resueltos, preguntas respondidas y arcos terminales **todavía no se
+cobran ni se declaran como evidencia ausente**, que es el hallazgo H-1 de SPEC-007 §9.3
+y queda pendiente de decisión.
+
 **El presupuesto de falsos positivos es agregado, no por dimensión.** *Escena
 limpia* cobra ocho invariantes sobre cada borrador, así que sus tasas se suman:
 ocho comprobaciones al 1 % dan una puerta al 8 %, y cinco de esas ocho son **(E)**,

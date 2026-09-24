@@ -118,6 +118,29 @@ try {
         Write-Host "  No se encuentra Claude Code ($nombreClaude) en el PATH." -ForegroundColor Yellow
     }
 
+    # --- 1b. Observabilidad -----------------------------------------------------------
+    # Solo las variables LANGFUSE_* de .env, y nunca sus valores en pantalla (SPEC-012
+    # RF-LAN-07, DV-2). Cargar el fichero entero cambiaria de base sin avisar si alguien
+    # copio .env.example, que trae MYSTORYMAKER_DB=./canon.db. Una variable ya definida en
+    # el entorno manda sobre la del fichero.
+    $ficheroEnv = Join-Path $raiz ".env"
+    if (Test-Path $ficheroEnv) {
+        $cargadas = @()
+        foreach ($linea in Get-Content $ficheroEnv) {
+            if ($linea -match '^\s*(LANGFUSE_[A-Z_]+)\s*=\s*(.*?)\s*$') {
+                $nombre = $Matches[1]
+                if (-not [Environment]::GetEnvironmentVariable($nombre)) {
+                    [Environment]::SetEnvironmentVariable($nombre, $Matches[2].Trim('"'))
+                    $cargadas += $nombre
+                }
+            }
+        }
+        if ($cargadas.Count -gt 0) {
+            Paso "Observabilidad"
+            Escribir "de .env: $($cargadas -join ', ')"
+        }
+    }
+
     # --- 2. Base de datos -------------------------------------------------------------
     Paso "Base de datos"
     Push-Location $raiz
@@ -137,9 +160,26 @@ try {
         -WorkingDirectory $raiz -PassThru -WindowStyle Hidden
     $procesos += $api
 
+    # Un worker que sobrevive a una ejecucion anterior sigue consumiendo la cola con el
+    # codigo y el entorno de entonces: dos workers a la vez se reparten las tareas, y las
+    # que coge el viejo no llegan a Langfuse (SPEC-012). El worker no tiene puerto que
+    # liberar, asi que se busca por su linea de comandos.
+    $huerfanos = Get-CimInstance Win32_Process -Filter "Name='python.exe' or Name='uv.exe'" |
+        Where-Object { $_.CommandLine -like '*-m backend.worker*' }
+    if ($huerfanos) {
+        Escribir "parando $(@($huerfanos).Count) proceso(s) de un worker anterior"
+        $huerfanos | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    }
+
+    # La salida del worker va a logs/: es donde dice que tarea cogio y, si Langfuse
+    # rechaza un envio, que respondio. En una ventana oculta no lo veria nadie.
+    $logs = Join-Path $raiz "logs"
+    New-Item -ItemType Directory -Force $logs | Out-Null
     $worker = Start-Process -FilePath "uv" `
         -ArgumentList "run", "python", "-m", "backend.worker" `
-        -WorkingDirectory $raiz -PassThru -WindowStyle Hidden
+        -WorkingDirectory $raiz -PassThru -WindowStyle Hidden `
+        -RedirectStandardOutput (Join-Path $logs "worker.log") `
+        -RedirectStandardError (Join-Path $logs "worker.err.log")
     $procesos += $worker
 
     $lectura = Start-Process -FilePath "npm.cmd" `
@@ -188,7 +228,9 @@ finally {
         Write-Host "`nParando..." -ForegroundColor DarkGray
         foreach ($p in $procesos) {
             if ($p -and -not $p.HasExited) {
-                Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+                # El arbol entero: `uv run` lanza un Python hijo que no muere con su
+                # padre, y ese hijo es el worker que se quedaba consumiendo la cola.
+                & taskkill.exe /PID $p.Id /T /F 2>&1 | Out-Null
             }
         }
         # npm lanza un hijo que no muere con su padre.

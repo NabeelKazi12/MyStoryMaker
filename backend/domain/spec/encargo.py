@@ -14,10 +14,19 @@ Cubre la parte de especificacion de RF-DOM-01 y los requisitos RF-CFG-01 y RF-CF
 
 from __future__ import annotations
 
+import unicodedata
 from dataclasses import dataclass
 
 from backend.domain.errors import exigir
-from backend.domain.vocabularies import TipoDeElementoPersonalizado
+from backend.domain.vocabularies import Relevancia, TipoDeElementoPersonalizado
+
+# Limites de un personaje declarado (SPEC-011 RF-PER-01 y RF-PER-03). Doce en total, la
+# persona destinataria incluida: un regalo con mas personajes que capitulos no se lee.
+LARGO_MAXIMO_DEL_NOMBRE = 80
+LARGO_MAXIMO_DE_LA_RELACION = 120
+LARGO_MAXIMO_DE_LA_DESCRIPCION = 500
+MAXIMO_DE_PERSONAJES = 12
+RELACION_DE_LA_DESTINATARIA = "a quien va dedicada"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -120,3 +129,61 @@ class Destinatario:
     def elementos_obligatorios(self) -> tuple[ElementoPersonalizado, ...]:
         """Los que RF-VAL-04 exige encontrar en al menos un capitulo."""
         return tuple(e for e in self.elementos if e.obligatorio)
+
+
+def clave_de_nombre(nombre: str) -> str:
+    """El nombre tal como se compara: sin espacios sobrantes, mayusculas ni acentos.
+
+    «Luis» y «luís» son la misma persona para quien encarga, y lo tienen que ser tambien
+    para la apertura: un Planner que escribe «Lucia» donde se declaro «Lucía» no se ha
+    dejado a nadie fuera (SPEC-011 RF-PER-03, RF-PER-06).
+    """
+    descompuesto = unicodedata.normalize("NFKD", " ".join(nombre.split()))
+    return "".join(c for c in descompuesto if not unicodedata.combining(c)).casefold()
+
+
+@dataclass(frozen=True, kw_only=True)
+class PersonajeDeclarado:
+    """Alguien que quien encarga quiere ver en la novela, dicho antes de escribirla.
+
+    Vive en la capa de especificacion, no en el canon: declarar es encargar. Entra en el
+    canon por la apertura, que tiene que proponerlo con su nombre y su papel o ve el plan
+    rechazado entero (SPEC-011, D-25). Lo que no se declara —deseo, necesidad, arco— lo
+    completa el Planner.
+    """
+
+    id: str
+    nombre: str
+    papel: Relevancia
+    relacion: str = ""
+    descripcion: str = ""
+    es_destinatario: bool = False
+
+    def __post_init__(self) -> None:
+        clase = type(self).__name__
+        nombre = self.nombre.strip()
+        exigir(bool(nombre), clase, "todo personaje declarado tiene nombre", f"id={self.id!r}")
+        exigir(
+            len(nombre) <= LARGO_MAXIMO_DEL_NOMBRE,
+            clase,
+            f"el nombre tiene como mucho {LARGO_MAXIMO_DEL_NOMBRE} caracteres",
+            f"«{nombre[:20]}…» tiene {len(nombre)}",
+        )
+        exigir(
+            len(self.relacion.strip()) <= LARGO_MAXIMO_DE_LA_RELACION,
+            clase,
+            f"la relacion tiene como mucho {LARGO_MAXIMO_DE_LA_RELACION} caracteres",
+            f"la de «{nombre}» tiene {len(self.relacion.strip())}",
+        )
+        exigir(
+            len(self.descripcion.strip()) <= LARGO_MAXIMO_DE_LA_DESCRIPCION,
+            clase,
+            f"la descripcion tiene como mucho {LARGO_MAXIMO_DE_LA_DESCRIPCION} caracteres",
+            f"la de «{nombre}» tiene {len(self.descripcion.strip())}",
+        )
+        exigir(
+            not self.es_destinatario or self.papel is Relevancia.PROTAGONICO,
+            clase,
+            "la persona destinataria es protagonista de su novela",
+            f"«{nombre}» llega como {self.papel.value}",
+        )

@@ -22,6 +22,7 @@ from backend.agents.entrevistador.entrevistador import (
     extraer_hechos_propuestos,
 )
 from backend.store.database import Conexion
+from backend.store.personajes import PersonajesDeclarados
 from backend.store.repositories import AuditLog, ListasProhibidas
 
 
@@ -140,6 +141,9 @@ def _persistir(conn: Conexion, encargo: Encargo, *, volumen_id: str, titulo: str
                 1 if elemento.obligatorio else 0,
             ),
         )
+
+    # Los personajes declarados, con la destinataria delante (SPEC-011).
+    PersonajesDeclarados(conn).reemplazar(encargo.brief.id, encargo.personajes)
 
     listas = ListasProhibidas(conn)
     for numero, palabra in enumerate(encargo.palabras_vetadas, start=1):

@@ -7,12 +7,15 @@ import { Icono } from "./Icono";
 export function Panel({
   titulo,
   lado = "izquierda",
+  ancho = false,
   abierto,
   alCerrar,
   children,
 }: {
   titulo: string;
   lado?: "izquierda" | "derecha";
+  /** Para contenido tabular, como los gastos: el panel estrecho parte las filas. */
+  ancho?: boolean;
   abierto: boolean;
   alCerrar: () => void;
   children: ReactNode;
@@ -38,7 +41,7 @@ export function Panel({
   return (
     <>
       <div className="velo" aria-hidden="true" />
-      <aside className={`panel panel-${lado}`} role="dialog" aria-modal="false" aria-label={titulo}>
+      <aside className={`panel panel-${lado}${ancho ? " panel-ancho" : ""}`} role="dialog" aria-modal="false" aria-label={titulo}>
         <header className="panel-cabecera">
           <h2>{titulo}</h2>
           <button ref={cierre} className="boton-icono" onClick={alCerrar} aria-label={`Cerrar ${titulo}`}>

@@ -55,8 +55,8 @@ def test_la_migracion_sella_su_version(base_migrada: Path) -> None:
     """
     with _conexion(base_migrada) as conn:
         sellada = conn.execute("SELECT version_num FROM alembic_version").fetchall()
-    # La cabeza avanza con cada migracion encadenada; hoy es 0004 (SPEC-004, fase A).
-    assert [fila[0] for fila in sellada] == ["0004"]
+    # La cabeza avanza con cada migracion encadenada; hoy es 0008 (SPEC-011, fase A).
+    assert [fila[0] for fila in sellada] == ["0008"]
 
 
 @pytest.mark.invariants

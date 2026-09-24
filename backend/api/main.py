@@ -71,6 +71,24 @@ def _esta_migrada(conn: Conexion) -> bool:
 Conexion = Annotated[ConexionDelStore, Depends(obtener_conexion)]
 
 
+def _novela_viva(volumen_id: str, conn: Conexion) -> None:
+    """`404` si la novela no existe o esta retirada (SPEC-009 RF-ELI-05).
+
+    Va como dependencia de **todas** las rutas con `{volumen_id}`, y no dentro de cada
+    una, para que una retirada no pueda colarse por la ruta que se olvido de mirarlo. Lo
+    cobra `test_ninguna_ruta_sirve_una_novela_eliminada`, que recorre todas las rutas.
+    """
+    from backend.orchestrator.eliminacion import NovelaInexistente, exigir_viva
+
+    try:
+        exigir_viva(conn, volumen_id)
+    except NovelaInexistente as inexistente:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(inexistente)) from None
+
+
+NOVELA_VIVA = [Depends(_novela_viva)]
+
+
 # --- esquemas de serializacion (no son clases del dominio) --------------------------
 
 
@@ -337,7 +355,245 @@ class PeticionDeCambio(BaseModel):
     descripcion: str = Field(min_length=1)
 
 
-@app.get("/novelas/{volumen_id}/lectura", operation_id="readNovela")
+# --- SPEC-011: los personajes del encargo -------------------------------------------
+# Se leen siempre y se reemplazan mientras la escritura no ha empezado. La validacion es
+# la de la entrevista; aqui solo se traduce a `422` y `409`.
+
+
+class PeticionDePersonajes(BaseModel):
+    """La lista entera, sin tipar a proposito: cada fila la valida el Entrevistador, que
+    es quien sabe decir que personaje falla y por que (RF-PER-04)."""
+
+    personajes: list[Any]
+
+
+class PersonajeDeclaradoSalida(BaseModel):
+    nombre: str
+    papel: str
+    relacion: str
+    descripcion: str
+    es_destinatario: bool
+
+
+class PersonajesDeNovela(BaseModel):
+    volumen_id: str
+    personajes: list[PersonajeDeclaradoSalida]
+
+
+def _como_personajes(volumen_id: str, personajes: Any) -> PersonajesDeNovela:
+    return PersonajesDeNovela(
+        volumen_id=volumen_id,
+        personajes=[
+            PersonajeDeclaradoSalida(
+                nombre=p.nombre,
+                papel=p.papel.value,
+                relacion=p.relacion,
+                descripcion=p.descripcion,
+                es_destinatario=p.es_destinatario,
+            )
+            for p in personajes
+        ],
+    )
+
+
+@app.get(
+    "/novelas/{volumen_id}/personajes", dependencies=NOVELA_VIVA, operation_id="readPersonajes"
+)
+def personajes_de_novela(volumen_id: str, conn: Conexion) -> PersonajesDeNovela:
+    """Los personajes declarados, la destinataria primero."""
+    from backend.orchestrator.personajes import leer
+
+    return _como_personajes(volumen_id, leer(conn, volumen_id))
+
+
+@app.put(
+    "/novelas/{volumen_id}/personajes",
+    dependencies=NOVELA_VIVA,
+    operation_id="updatePersonajes",
+)
+def reemplazar_personajes(
+    volumen_id: str, peticion: PeticionDePersonajes, conn: Conexion
+) -> PersonajesDeNovela:
+    """Reemplaza la lista entera. `409` si la escritura ya empezo o esta aprobada."""
+    from backend.orchestrator.personajes import (
+        PersonajesCerrados,
+        PersonajesInvalidos,
+        reemplazar,
+    )
+
+    try:
+        guardados = reemplazar(conn, volumen_id, peticion.personajes)
+    except PersonajesCerrados as cerrados:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(cerrados)) from None
+    except PersonajesInvalidos as invalidos:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            {
+                "huecos": [],
+                "contradicciones": [
+                    {"campos": list(problema.campos), "detalle": problema.detalle}
+                    for problema in invalidos.problemas
+                ],
+            },
+        ) from None
+    return _como_personajes(volumen_id, guardados)
+
+
+# --- SPEC-012: gastos y trazas -----------------------------------------------------
+# Se leen de SQLite, que es la fuente de verdad del gasto (SPEC-003 S-02). Langfuse solo
+# aporta el enlace a cada traza, y si no esta configurado la ruta responde igual.
+
+
+class TotalDeGastoSalida(BaseModel):
+    coste: float
+    llamadas: int
+    fallidas: int
+    tokens_entrada: int
+    tokens_salida: int
+    latencia_ms: int
+    llamadas_sin_tokens: int
+
+
+class DesgloseSalida(BaseModel):
+    nombre: str
+    coste: float
+    llamadas: int
+
+
+class LlamadaDeGastoSalida(BaseModel):
+    id: str
+    momento: str
+    agente: str
+    modelo: str
+    version_de_prompt: str
+    tarea: str
+    escena_id: str | None
+    capitulo_orden: int | None
+    intento: int
+    coste: float
+    latencia_ms: int
+    tokens_entrada: int | None
+    tokens_salida: int | None
+    clase_de_fallo: str | None
+    traza_url: str | None
+
+
+class GastosDeNovela(BaseModel):
+    volumen_id: str
+    moneda: str
+    langfuse_activo: bool
+    total: TotalDeGastoSalida
+    por_rol: list[DesgloseSalida]
+    por_capitulo: list[DesgloseSalida]
+    llamadas: list[LlamadaDeGastoSalida]
+
+
+@app.get(
+    "/novelas/{volumen_id}/gastos", dependencies=NOVELA_VIVA, operation_id="readGastos"
+)
+def gastos_de_novela(volumen_id: str, conn: Conexion) -> GastosDeNovela:
+    """Lo que ha costado la novela: totales, desglose y cada llamada. Solo lectura.
+
+    El enlace a cada traza se compone con las variables de entorno, sin preguntar a
+    Langfuse: `api/` no hace HTTP (`test_import_boundaries`, SPEC-012 DV-1).
+    """
+    from backend.observability.langfuse import langfuse_activo, url_de_traza
+    from backend.store.gastos import GastosDeLaNovela
+
+    resumen = GastosDeLaNovela(conn).resumen(volumen_id)
+    activo = langfuse_activo()
+    return GastosDeNovela(
+        volumen_id=volumen_id,
+        moneda="USD",
+        langfuse_activo=activo,
+        total=TotalDeGastoSalida(**vars(resumen.total)),
+        por_rol=[DesgloseSalida(**vars(d)) for d in resumen.por_rol],
+        por_capitulo=[DesgloseSalida(**vars(d)) for d in resumen.por_capitulo],
+        llamadas=[
+            LlamadaDeGastoSalida(
+                **vars(llamada),
+                # Solo las llamadas con tokens pueden haberse enviado: las de antes de
+                # SPEC-012 no los guardaron y nunca llegaron a Langfuse (N-06, DV-3).
+                traza_url=(
+                    url_de_traza(None, llamada.id)
+                    if llamada.tokens_entrada is not None or llamada.tokens_salida is not None
+                    else None
+                ),
+            )
+            for llamada in resumen.llamadas
+        ],
+    )
+
+
+# --- SPEC-008: la biblioteca -------------------------------------------------------
+# Solo lectura. El estado y la aprobacion de cada novela salen de las mismas funciones
+# que sirven `/escritura` y `/lectura`, para que la biblioteca no pueda contradecirlas.
+
+
+class NovelaDeBiblioteca(BaseModel):
+    volumen_id: str
+    titulo: str
+    destinatario: str
+    estado: str
+    detalle: str
+    capitulos: int
+    palabras: int
+    ultima_version_en: str | None
+    aprobacion: dict[str, Any] | None
+
+
+@app.get("/novelas", operation_id="listNovelas")
+def listar_novelas(conn: Conexion) -> list[NovelaDeBiblioteca]:
+    """Todas las novelas, la mas reciente primero. Sin novelas, lista vacia y `200`."""
+    from backend.orchestrator.biblioteca import biblioteca
+
+    return [
+        NovelaDeBiblioteca(
+            volumen_id=novela.volumen_id,
+            titulo=novela.titulo,
+            destinatario=novela.destinatario,
+            estado=novela.estado,
+            detalle=novela.detalle,
+            capitulos=novela.capitulos,
+            palabras=novela.palabras,
+            ultima_version_en=novela.ultima_version_en,
+            aprobacion=(
+                None
+                if novela.aprobacion is None
+                else _como_vigente(novela.aprobacion).model_dump()
+            ),
+        )
+        for novela in biblioteca(conn)
+    ]
+
+
+class NovelaEliminada(BaseModel):
+    volumen_id: str
+    titulo: str
+    eliminada_en: str
+
+
+@app.delete("/novelas/{volumen_id}", dependencies=NOVELA_VIVA, operation_id="deleteNovela")
+def eliminar_novela(volumen_id: str, conn: Conexion) -> NovelaEliminada:
+    """Retira la novela: deja de verse en la biblioteca y en todas las rutas.
+
+    No borra ninguna fila (SPEC-009 N-01, D-23). Aprobada o escribiendose, `409` con el
+    motivo; inexistente o ya retirada, `404` desde `NOVELA_VIVA`.
+    """
+    from backend.orchestrator.eliminacion import EliminacionRechazada, eliminar
+
+    try:
+        retirada = eliminar(conn, volumen_id)
+    except EliminacionRechazada as rechazo:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(rechazo)) from None
+    return NovelaEliminada(
+        volumen_id=retirada.volumen_id,
+        titulo=retirada.titulo,
+        eliminada_en=retirada.eliminada_en,
+    )
+
+
+@app.get("/novelas/{volumen_id}/lectura", dependencies=NOVELA_VIVA, operation_id="readNovela")
 def lectura_de_novela(volumen_id: str, conn: Conexion) -> dict[str, Any]:
     """Todo lo que la lectura necesita: portada, indice y ficha, en una sola llamada.
 
@@ -409,10 +665,13 @@ def lectura_de_novela(volumen_id: str, conn: Conexion) -> dict[str, Any]:
         "capitulos": [dict(f) for f in capitulos],
         "personajes": [dict(f) for f in personajes],
         "lugares": [dict(f) for f in lugares],
+        "aprobacion": _aprobacion_vigente(conn, volumen_id),
     }
 
 
-@app.get("/novelas/{volumen_id}/versiones", operation_id="listVersiones")
+@app.get(
+    "/novelas/{volumen_id}/versiones", dependencies=NOVELA_VIVA, operation_id="listVersiones"
+)
 def versiones_de_novela(volumen_id: str, conn: Conexion) -> list[dict[str, Any]]:
     """El historial. La version anterior se conserva siempre (RF-LEC-07)."""
     filas = conn.execute(
@@ -435,7 +694,7 @@ def capitulos_de_version(version_id: str, conn: Conexion) -> list[dict[str, Any]
 
 
 @app.post(
-    "/novelas/{volumen_id}/cambios",
+    "/novelas/{volumen_id}/cambios", dependencies=NOVELA_VIVA,
     status_code=status.HTTP_202_ACCEPTED,
     operation_id="createCambioDelLector",
 )
@@ -448,6 +707,7 @@ def pedir_cambio(volumen_id: str, peticion: PeticionDeCambio, conn: Conexion) ->
     from backend.orchestrator.regeneracion import CambioDelLector, capitulos_afectados
     from backend.store.repositories import UsoDeHechos
 
+    _exigir_novela_abierta(conn, volumen_id)
     afectados = capitulos_afectados(
         CambioDelLector(hecho_id=peticion.hecho_id, descripcion=peticion.descripcion),
         usos=UsoDeHechos(conn),
@@ -531,7 +791,7 @@ class TextoDeNovela(BaseModel):
 
 
 @app.post(
-    "/novelas/{volumen_id}/escritura",
+    "/novelas/{volumen_id}/escritura", dependencies=NOVELA_VIVA,
     status_code=status.HTTP_202_ACCEPTED,
     operation_id="createEscritura",
 )
@@ -555,6 +815,7 @@ def encargar_escritura(
             f"modo desconocido {peticion.modo!r}; hay «modelo» y «demostracion»",
         ) from None
 
+    _exigir_novela_abierta(conn, volumen_id)
     try:
         encolada = encolar_escritura(conn, volumen_id, modo)
     except NoHayConQueEscribir as sin_credencial:
@@ -588,7 +849,11 @@ def _aviso_del_modo(modo: ModoDeEscritura) -> str:
     )
 
 
-@app.get("/novelas/{volumen_id}/escritura", operation_id="readProgresoDeEscritura")
+@app.get(
+    "/novelas/{volumen_id}/escritura",
+    dependencies=NOVELA_VIVA,
+    operation_id="readProgresoDeEscritura",
+)
 def progreso_de_escritura(volumen_id: str, conn: Conexion) -> ProgresoDeEscritura:
     """Por donde va la escritura. Una novela sin encargar responde `200`, no `404`."""
     from backend.orchestrator.escritura import progreso
@@ -617,7 +882,9 @@ def progreso_de_escritura(volumen_id: str, conn: Conexion) -> ProgresoDeEscritur
     )
 
 
-@app.get("/novelas/{volumen_id}/texto", operation_id="readTextoDeNovela")
+@app.get(
+    "/novelas/{volumen_id}/texto", dependencies=NOVELA_VIVA, operation_id="readTextoDeNovela"
+)
 def texto_de_novela(volumen_id: str, conn: Conexion) -> TextoDeNovela:
     """La prosa escrita, capitulo a capitulo, con el estado de cada borrador.
 
@@ -664,7 +931,7 @@ def texto_de_novela(volumen_id: str, conn: Conexion) -> TextoDeNovela:
 
 
 @app.get(
-    "/novelas/{volumen_id}/pdf",
+    "/novelas/{volumen_id}/pdf", dependencies=NOVELA_VIVA,
     operation_id="readPdfDeNovela",
     response_class=Response,
     responses={200: {"content": {"application/pdf": {}}}},
@@ -740,7 +1007,9 @@ class PortadaGuardada(BaseModel):
     dedicatoria: str
 
 
-@app.patch("/novelas/{volumen_id}/portada", operation_id="updatePortada")
+@app.patch(
+    "/novelas/{volumen_id}/portada", dependencies=NOVELA_VIVA, operation_id="updatePortada"
+)
 def editar_portada(
     volumen_id: str, peticion: PeticionDePortada, conn: Conexion
 ) -> PortadaGuardada:
@@ -757,6 +1026,7 @@ def editar_portada(
         editar_portada as editar,
     )
 
+    _exigir_novela_abierta(conn, volumen_id)
     try:
         portada = editar(
             conn, volumen_id, titulo=peticion.titulo, dedicatoria=peticion.dedicatoria
@@ -769,6 +1039,105 @@ def editar_portada(
     return PortadaGuardada(
         volumen_id=portada.volumen_id, titulo=portada.titulo, dedicatoria=portada.dedicatoria
     )
+
+
+# --- SPEC-007: la novela se aprueba ------------------------------------------------
+# La firma de una persona es la evidencia de *promesa al lector* en *Volumen cerrado*. Lo
+# decide `orchestrator/aprobacion.py`; aqui solo se traduce a HTTP: `409` cuando no se
+# puede, con el motivo y los defectos tal como salen de la puerta.
+
+
+class AprobacionVigente(BaseModel):
+    id: str
+    version_numero: int
+    aprobada_en: str
+    retirada_en: str | None = None
+
+
+class AprobacionRegistrada(BaseModel):
+    volumen_id: str
+    aprobacion: AprobacionVigente
+    # Escenas cuyo borrador sigue sin aceptar y quedan firmadas tal como estan.
+    sin_aceptar: int
+
+
+class AprobacionRetirada(BaseModel):
+    volumen_id: str
+    aprobacion: AprobacionVigente
+
+
+@app.post(
+    "/novelas/{volumen_id}/aprobacion", dependencies=NOVELA_VIVA,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="createAprobacion",
+)
+def aprobar_novela(volumen_id: str, conn: Conexion) -> AprobacionRegistrada:
+    """Aprueba la novela si esta escrita y *Volumen cerrado* se supera con la firma."""
+    from backend.orchestrator.aprobacion import AprobacionRechazada, VolumenDesconocido, aprobar
+
+    try:
+        resultado = aprobar(conn, volumen_id)
+    except VolumenDesconocido as desconocido:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(desconocido)) from None
+    except AprobacionRechazada as rechazo:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "motivo": rechazo.motivo,
+                "defectos": [
+                    {"tipo": d.tipo, "regla_violada": d.regla_violada, "evidencia": d.evidencia}
+                    for d in rechazo.defectos
+                ],
+            },
+        ) from None
+    return AprobacionRegistrada(
+        volumen_id=volumen_id,
+        aprobacion=_como_vigente(resultado.aprobacion),
+        sin_aceptar=resultado.sin_aceptar,
+    )
+
+
+@app.post(
+    "/novelas/{volumen_id}/aprobacion/retirada", dependencies=NOVELA_VIVA,
+    operation_id="createRetiradaDeAprobacion",
+)
+def reabrir_novela(volumen_id: str, conn: Conexion) -> AprobacionRetirada:
+    """Retira la aprobacion vigente. La fila se queda, con su fecha de retirada."""
+    from backend.orchestrator.aprobacion import AprobacionRechazada, VolumenDesconocido, retirar
+
+    try:
+        retirada = retirar(conn, volumen_id)
+    except VolumenDesconocido as desconocido:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(desconocido)) from None
+    except AprobacionRechazada as rechazo:
+        raise HTTPException(status.HTTP_409_CONFLICT, rechazo.motivo) from None
+    return AprobacionRetirada(volumen_id=volumen_id, aprobacion=_como_vigente(retirada))
+
+
+def _como_vigente(aprobacion: Any) -> AprobacionVigente:
+    return AprobacionVigente(
+        id=aprobacion.id,
+        version_numero=aprobacion.version_numero,
+        aprobada_en=aprobacion.aprobada_en,
+        retirada_en=aprobacion.retirada_en,
+    )
+
+
+def _aprobacion_vigente(conn: Conexion, volumen_id: str) -> dict[str, Any] | None:
+    from backend.orchestrator.aprobacion import vigente
+
+    actual = vigente(conn, volumen_id)
+    return None if actual is None else _como_vigente(actual).model_dump()
+
+
+def _exigir_novela_abierta(conn: Conexion, volumen_id: str) -> None:
+    """`409` si la novela esta aprobada: cambiarla exige reabrirla antes (RF-APR-08)."""
+    from backend.orchestrator.aprobacion import NovelaAprobada, exigir_abierta
+
+    try:
+        exigir_abierta(conn, volumen_id)
+    except NovelaAprobada as aprobada:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(aprobada)) from None
 
 
 def _exigir_volumen(conn: Conexion, volumen_id: str) -> Any:

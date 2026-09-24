@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
+from backend.domain.spec.encargo import clave_de_nombre
 from backend.domain.vocabularies import (
     FuncionEnTrama,
     Relevancia,
@@ -31,7 +32,7 @@ from backend.domain.vocabularies import (
     TipoDeEvento,
 )
 
-VERSION_DE_PROMPT = "1.2.0"
+VERSION_DE_PROMPT = "1.3.0"
 PROMPTS = Path(__file__).parent / "prompts"
 
 
@@ -44,6 +45,9 @@ MANIFIESTO = {
     # v1.2.0 no cambia el esquema: dice el tipo de cada columna y trae un ejemplo, porque
     # con un modelo real la v1.1.0 recibia «inicio» donde el esquema pide un numero.
     "1.2.0": "2f5eb97b7d58f6fecb8ed460af1e6676ad351deec2039c6d59face61e291daa9",
+    # v1.3.0 recibe los personajes declarados del encargo y la regla de usarlos todos con
+    # su nombre y su relevancia (SPEC-011). El esquema de salida no cambia.
+    "1.3.0": "50a7dfdeaecc15b807d9f50c710b360169e8867d60c3e6e7e35b73797c46bd63",
 }
 
 
@@ -221,7 +225,10 @@ def parsear_plan(texto: str) -> PlanDeCapitulos:
 
 
 def parsear_apertura(
-    texto: str, *, recuerdos_obligatorios: Sequence[str] = ()
+    texto: str,
+    *,
+    recuerdos_obligatorios: Sequence[str] = (),
+    personajes_declarados: Sequence[tuple[str, Relevancia]] = (),
 ) -> Apertura:
     """Convierte la salida de `v1.1.0` en canon propuesto, o rechaza el plan entero.
 
@@ -258,6 +265,7 @@ def parsear_apertura(
     )
     _exigir_coherencia(apertura)
     _exigir_cobertura_de_recuerdos(apertura, recuerdos_obligatorios)
+    _exigir_personajes_declarados(apertura, personajes_declarados)
     return apertura
 
 
@@ -393,6 +401,52 @@ def _exigir_cobertura_de_recuerdos(
             f"estos recuerdos obligatorios no los cubre ningun capitulo: "
             f"{', '.join(huerfanos)}. El cliente los declaro obligatorios, y una novela "
             f"que se los deja fuera parece completa pero no cumple lo que se pidio"
+        )
+
+
+def _exigir_personajes_declarados(
+    apertura: Apertura, declarados: Sequence[tuple[str, Relevancia]]
+) -> None:
+    """SPEC-011 RF-PER-06: cada declarado esta, con su nombre y su papel.
+
+    El nombre se compara sin mayusculas ni acentos: «Lucia» por «Lucía» no deja a nadie
+    fuera. El papel, exacto: una hermana declarada protagonista y propuesta de fondo es
+    otra novela. El Planner puede anadir los que quiera (RF-PER-07).
+    """
+    propuestos = {clave_de_nombre(p.nombre_canonico): p for p in apertura.personajes}
+    # «Aparecer» es salir en la historia: participar en algun evento o ser el punto de
+    # vista de alguna escena. Estar solo en la lista no cuenta: un personaje que ninguna
+    # escena usa no sale en la novela, aunque figure en el canon.
+    en_la_historia = {e.participante_id for e in apertura.eventos} | {
+        s.pov_id for s in apertura.escenas
+    }
+    ausentes: list[str] = []
+    cambiados: list[str] = []
+    sin_escena: list[str] = []
+    for nombre, papel in declarados:
+        propuesto = propuestos.get(clave_de_nombre(nombre))
+        if propuesto is None:
+            ausentes.append(f"«{nombre}»")
+        elif propuesto.relevancia is not papel:
+            cambiados.append(
+                f"«{nombre}» se declaro {papel.value} y llega {propuesto.relevancia.value}"
+            )
+        elif propuesto.id not in en_la_historia:
+            sin_escena.append(f"«{nombre}»")
+    if ausentes or cambiados or sin_escena:
+        partes = []
+        if ausentes:
+            partes.append(f"faltan personajes declarados: {', '.join(ausentes)}")
+        if cambiados:
+            partes.append("; ".join(cambiados))
+        if sin_escena:
+            partes.append(
+                f"estos personajes declarados no salen en ninguna escena ni evento: "
+                f"{', '.join(sin_escena)}"
+            )
+        raise SalidaInvalidaDelPlanner(
+            ". ".join(partes) + ". Quien encarga los declaro antes de escribir, y una "
+            "novela que los cambia o se los deja fuera no es la que se pidio"
         )
 
 

@@ -24,12 +24,15 @@ import time
 from dataclasses import dataclass, field
 
 from backend.domain.vocabularies import EstadoDeTarea, ModoDeEscritura
+from backend.observability.langfuse import cliente_desde_el_entorno
+from backend.observability.trazas import ClienteDeObservabilidad
 from backend.orchestrator.admision import Semaforo
 from backend.orchestrator.ejecucion import reanudar_al_arrancar, registrar_transicion
 from backend.store import database
 from backend.store.escritura import ColaDeTareas
 from backend.worker.bucle import Bucle
 from backend.worker.modelo import ClaudeCodeAusente, ClienteDeModelo, construir_cliente
+from backend.worker.transporte import transporte_urllib
 
 # Cada cuanto se vuelve a mirar la cola cuando esta vacia. Un segundo es holgado: lo que
 # se espera aqui es que alguien pulse un boton, no un flujo continuo de trabajo.
@@ -47,6 +50,11 @@ class Servicio:
     ruta: str | None = None
     semaforo: Semaforo = field(default_factory=Semaforo)
     _clientes: dict[ModoDeEscritura, ClienteDeModelo] = field(default_factory=dict)
+    # Langfuse si estan las claves en el entorno; si no, nulo (SPEC-012 RF-LAN-01). El
+    # transporte HTTP lo pone el worker: `observability/` no puede hacer red (DV-1).
+    observabilidad: ClienteDeObservabilidad = field(
+        default_factory=lambda: cliente_desde_el_entorno(None, transporte_urllib)
+    )
 
     def cliente_de(self, modo: ModoDeEscritura) -> ClienteDeModelo:
         if modo not in self._clientes:
@@ -83,7 +91,13 @@ class Servicio:
                 print(f"worker: {siguiente['id']} detenida. {ausente}", file=sys.stderr)
                 return True
 
-            bucle = Bucle(conn=conn, modo=modo, cliente=cliente, semaforo=self.semaforo)
+            bucle = Bucle(
+                conn=conn,
+                modo=modo,
+                cliente=cliente,
+                semaforo=self.semaforo,
+                observabilidad=self.observabilidad,
+            )
             resultado = bucle.una_vuelta()
 
         if resultado is not None:

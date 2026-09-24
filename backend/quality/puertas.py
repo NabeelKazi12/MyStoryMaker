@@ -134,6 +134,16 @@ def capitulo_cerrado() -> Puerta:
     return Puerta("capitulo_cerrado", Politica.BLOQUEANTE, AUSENTES_EN_V1["capitulo_cerrado"])
 
 
-def volumen_cerrado() -> Puerta:
-    """Final. Siembras, hilos, preguntas dramaticas y arcos."""
-    return Puerta("volumen_cerrado", Politica.BLOQUEANTE, AUSENTES_EN_V1["volumen_cerrado"])
+def volumen_cerrado(*, firmada: bool = False) -> Puerta:
+    """Final. Siembras, hilos, preguntas dramaticas y arcos.
+
+    `promesa_al_lector` es de una persona (`verification.md` 6), y la unica evidencia que
+    la cubre es su firma. Con `firmada` sale de la evidencia ausente y **nada mas cambia**:
+    los defectos deterministas siguen parando la linea (SPEC-007 N-02).
+    """
+    ausentes = tuple(
+        ausente
+        for ausente in AUSENTES_EN_V1["volumen_cerrado"]
+        if not (firmada and ausente == "promesa_al_lector")
+    )
+    return Puerta("volumen_cerrado", Politica.BLOQUEANTE, ausentes)

@@ -56,8 +56,9 @@ class RegistroDeInvocacion:
     def guardar_procedencia(self, procedencia: Procedencia) -> None:
         self.conn.execute(
             "INSERT INTO procedencia (id, agente, modelo, version_de_prompt, paquete_id, "
-            "parametros_muestreo, coste, latencia_ms, clase_de_fallo, timestamp) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+            "parametros_muestreo, coste, latencia_ms, clase_de_fallo, tokens_entrada, "
+            "tokens_salida, timestamp) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
             (
                 procedencia.id,
                 procedencia.agente,
@@ -72,6 +73,8 @@ class RegistroDeInvocacion:
                     if procedencia.clase_de_fallo is None
                     else procedencia.clase_de_fallo.value
                 ),
+                procedencia.tokens_entrada,
+                procedencia.tokens_salida,
             ),
         )
 

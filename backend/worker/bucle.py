@@ -46,7 +46,12 @@ from backend.context.presupuesto import (
     PresupuestoExcedido,
 )
 from backend.domain.diegetic.canon import Hecho
-from backend.domain.production.ejecucion import Defecto, PaqueteDeContexto, Tarea
+from backend.domain.production.ejecucion import (
+    Defecto,
+    PaqueteDeContexto,
+    Procedencia,
+    Tarea,
+)
 from backend.domain.spec.encargo import Destinatario, ElementoPersonalizado
 from backend.domain.vocabularies import (
     ClaseDeFallo,
@@ -56,6 +61,8 @@ from backend.domain.vocabularies import (
     Severidad,
     TipoDeElementoPersonalizado,
 )
+from backend.observability.langfuse import LlamadaObservada, registrar_llamada
+from backend.observability.trazas import ClienteDeObservabilidad, ClienteNulo
 from backend.orchestrator.admision import Semaforo
 from backend.orchestrator.apertura import (
     AperturaImposible,
@@ -145,6 +152,9 @@ class Bucle:
     modo: ModoDeEscritura
     cliente: ClienteDeModelo
     semaforo: Semaforo = field(default_factory=Semaforo)
+    # A donde va cada llamada ademas de a SQLite (SPEC-012). Nulo por defecto: sin
+    # Langfuse la novela se escribe igual, que es la regla de SPEC-003.
+    observabilidad: ClienteDeObservabilidad = field(default_factory=ClienteNulo)
 
     @classmethod
     def para(cls, conn: Conexion, modo: ModoDeEscritura) -> Bucle:
@@ -256,7 +266,9 @@ class Bucle:
             for invocacion in invocaciones:
                 try:
                     apertura = parsear_apertura(
-                        invocacion.crudo.texto, recuerdos_obligatorios=encargo.ids_de_recuerdos
+                        invocacion.crudo.texto,
+                        recuerdos_obligatorios=encargo.ids_de_recuerdos,
+                        personajes_declarados=encargo.personajes_a_cobrar,
                     )
                     resultado = persistir_apertura(self.conn, encargo, apertura)
                     break
@@ -773,6 +785,7 @@ class Bucle:
             tarea["id"], paquete_id, prompt
         )
         registro.guardar_procedencia(crudo.procedencia)
+        self._observar(tarea, crudo.procedencia)
 
         if crudo.clase_de_fallo is not None:
             cola = ColaDeTareas(self.conn)
@@ -782,6 +795,53 @@ class Bucle:
             cola.anotar_falta(tarea["id"], (crudo.detalle_del_fallo,))
             return None
         return Invocacion(crudo=crudo, paquete=paquete)
+
+    def _observar(self, tarea: Fila, procedencia: Procedencia) -> None:
+        """Envia la llamada al observador, despues de guardarla en SQLite.
+
+        Va despues a proposito: la procedencia es la fuente de verdad y ya esta escrita
+        cuando se observa (SPEC-003 S-02). El cliente de Langfuse descarta sus propios
+        fallos; este `try` es para que ni un cliente mal hecho pare la escritura.
+        """
+        posicion = self.conn.execute(
+            """
+            SELECT pl.volumen_id, e.id AS escena_id, c.orden AS capitulo_orden
+            FROM tarea t
+            JOIN plan pl ON pl.id = t.plan_id
+            LEFT JOIN escena e ON t.id = e.id || ':redaccion'
+            LEFT JOIN capitulo c ON c.id = e.capitulo_id
+            WHERE t.id = ?
+            """,
+            (tarea["id"],),
+        ).fetchone()
+        if posicion is None or posicion["volumen_id"] is None:
+            return
+        try:
+            registrar_llamada(
+                self.observabilidad,
+                LlamadaObservada(
+                    procedencia_id=procedencia.id,
+                    volumen_id=posicion["volumen_id"],
+                    agente=procedencia.agente,
+                    tarea=tarea["tipo"],
+                    modelo=procedencia.modelo,
+                    version_de_prompt=procedencia.version_de_prompt,
+                    tokens_entrada=procedencia.tokens_entrada,
+                    tokens_salida=procedencia.tokens_salida,
+                    coste=procedencia.coste,
+                    latencia_ms=procedencia.latencia_ms,
+                    clase_de_fallo=(
+                        None
+                        if procedencia.clase_de_fallo is None
+                        else procedencia.clase_de_fallo.value
+                    ),
+                    escena_id=posicion["escena_id"],
+                    capitulo_orden=posicion["capitulo_orden"],
+                    modo=self.modo.value,
+                ),
+            )
+        except Exception:  # noqa: BLE001 - observar nunca para la escritura (RF-LAN-03)
+            return
 
     def _anotar_apertura_rechazada(self, tarea: Fila) -> None:
         ColaDeTareas(self.conn).anotar_intento(
@@ -848,6 +908,7 @@ class Bucle:
         salieron: list[Invocacion] = []
         for crudo in crudos:
             registro.guardar_procedencia(crudo.procedencia)
+            self._observar(tarea, crudo.procedencia)
             if crudo.clase_de_fallo is not None:
                 cola.anotar_intento(
                     tarea["id"], clase=crudo.clase_de_fallo.value, tipo_de_defecto=None

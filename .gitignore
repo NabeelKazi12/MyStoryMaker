@@ -21,3 +21,6 @@ Thumbs.db
 
 # Cache de TypeScript
 *.tsbuildinfo
+
+# Logs del worker que escribe run.ps1 (SPEC-012)
+logs/

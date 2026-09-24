@@ -32,8 +32,10 @@ from backend.agents.planner.planner import (
     EscenaPlanificada,
     prompt_vigente,
 )
-from backend.domain.vocabularies import RolEnEvento
+from backend.domain.spec.encargo import PersonajeDeclarado
+from backend.domain.vocabularies import Relevancia, RolEnEvento
 from backend.store.database import Conexion
+from backend.store.personajes import PersonajesDeclarados
 
 
 class NovelaDesconocida(LookupError):
@@ -81,10 +83,18 @@ class EncargoDeNovela:
     dedicatoria: str
     tono: str
     recuerdos: tuple[RecuerdoObligatorio, ...]
+    # Los que quien encarga declaro (SPEC-011). Vacio en las novelas de antes de `0008`:
+    # entonces solo se comprueba que haya algun protagonista, como hasta ahora.
+    personajes_declarados: tuple[PersonajeDeclarado, ...] = ()
 
     @property
     def ids_de_recuerdos(self) -> tuple[str, ...]:
         return tuple(r.id for r in self.recuerdos)
+
+    @property
+    def personajes_a_cobrar(self) -> tuple[tuple[str, Relevancia], ...]:
+        """Nombre y papel de cada declarado: lo que la apertura tiene que proponer."""
+        return tuple((p.nombre, p.papel) for p in self.personajes_declarados)
 
 
 @dataclass(frozen=True)
@@ -148,6 +158,7 @@ def leer_encargo(conn: Conexion, volumen_id: str) -> EncargoDeNovela:
         recuerdos=tuple(
             RecuerdoObligatorio(id=r["id"], contenido=r["contenido"]) for r in recuerdos
         ),
+        personajes_declarados=PersonajesDeclarados(conn).de_brief(fila["brief_id"]),
     )
 
 
@@ -175,11 +186,26 @@ def instruccion_de_apertura(encargo: EncargoDeNovela) -> str:
     lineas += [
         f"recuerdo {recuerdo.id} | {recuerdo.contenido}" for recuerdo in encargo.recuerdos
     ]
+    # La barra separa los campos del contrato: un texto que la traiga partiria la fila.
+    lineas += [
+        "personaje declarado | "
+        + " | ".join(
+            valor.replace("|", "/")
+            for valor in (p.nombre, p.papel.value, p.relacion, p.descripcion)
+        )
+        for p in encargo.personajes_declarados
+    ]
     lineas += [
         "",
         "Cada recuerdo de arriba es obligatorio: tiene que ir en la columna «recuerdos "
         "que cubre» de al menos un capitulo, con su identificador tal cual.",
     ]
+    if encargo.personajes_declarados:
+        lineas.append(
+            "Cada personaje declarado es obligatorio: tiene que estar en el bloque de "
+            "personajes con ese nombre canonico exacto y esa relevancia. Puedes anadir "
+            "los personajes que la historia necesite."
+        )
     return "\n".join(lineas)
 
 

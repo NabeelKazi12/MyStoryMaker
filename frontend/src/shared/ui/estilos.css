@@ -27,6 +27,7 @@
   --sombra-alta: 0 12px 48px rgb(40 30 10 / 18%);
   --velo: rgb(30 24 14 / 28%);
   --barra: rgb(247 243 234 / 86%);
+  --grafico: #9a6424;
   color-scheme: light;
 }
 
@@ -47,6 +48,7 @@
   --error-suave: #f0d6c6;
   --barra: rgb(241 228 201 / 88%);
   --velo: rgb(58 45 31 / 30%);
+  --grafico: #9a5a1c;
   color-scheme: light;
 }
 
@@ -69,6 +71,7 @@
   --sombra-alta: 0 12px 48px rgb(0 0 0 / 55%);
   --velo: rgb(0 0 0 / 50%);
   --barra: rgb(20 21 24 / 86%);
+  --grafico: #c0822f;
   color-scheme: dark;
 }
 
@@ -1865,4 +1868,720 @@ button.tarjeta-paso:hover {
 .formulario-portada {
   display: grid;
   gap: 0.75rem;
+}
+
+/* --- La firma (SPEC-007) -------------------------------------------------------------
+   Aprobar es el último paso de la lectura, y se ve como tal: la tarjeta «Fin» se vuelve
+   el sitio donde se firma, y una novela aprobada lleva su sello en la cubierta y en la
+   barra. El sello usa el verde de «aceptado», que es lo más parecido que tiene el sistema
+   a «esto está dado por bueno». */
+
+.tarjeta-paso.fin > span:last-child {
+  white-space: normal;
+}
+
+.tarjeta-paso.fin.firmable {
+  border-style: solid;
+  border-color: var(--marca);
+  background: var(--marca-suave);
+  color: var(--tinta);
+  gap: 0.6rem;
+}
+
+.tarjeta-paso.fin.firmable .boton {
+  justify-self: end;
+  margin-top: 0.25rem;
+}
+
+.tarjeta-paso.fin.aprobada {
+  border-style: solid;
+  border-color: var(--exito);
+  background: var(--exito-suave);
+  color: var(--tinta);
+}
+
+.tarjeta-paso.fin.aprobada .antetitulo {
+  color: var(--exito);
+}
+
+.sello-aprobada {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  margin-right: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--exito);
+  background: var(--exito-suave);
+  color: var(--exito);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sello-cubierta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.45rem 0.95rem;
+  border-radius: 999px;
+  border: 1px solid var(--exito);
+  background: var(--exito-suave);
+  color: var(--exito);
+  font-size: 0.85rem;
+  font-weight: 600;
+  justify-self: center;
+}
+
+.bloque-aprobada {
+  padding: 1rem;
+  border-radius: var(--radio);
+  border: 1px solid var(--exito);
+  background: color-mix(in srgb, var(--exito-suave) 60%, transparent);
+}
+
+.bloque-aprobada .sello-cubierta {
+  justify-self: start;
+}
+
+.nota-bloqueo {
+  margin: 0 0 0.9rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radio);
+  background: var(--superficie-2);
+  color: var(--tinta-suave);
+  font-size: 0.82rem;
+}
+
+.enlace:disabled {
+  color: var(--apagado);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.dialogo-texto {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--tinta-suave);
+}
+
+.resumen-firma {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio);
+  background: var(--fondo);
+  padding: 0.75rem 0.5rem;
+  text-align: center;
+}
+
+.resumen-firma div + div {
+  border-left: 1px solid var(--linea);
+}
+
+.resumen-firma dt {
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--apagado);
+}
+
+.resumen-firma dd {
+  margin: 0.15rem 0 0;
+  font-family: var(--libro);
+  font-size: 1.15rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 560px) {
+  .sello-aprobada {
+    padding: 0.3rem 0.5rem;
+  }
+}
+
+/* --- La biblioteca (SPEC-008) --------------------------------------------------------
+   Una estantería de cubiertas, con la misma cubierta tipográfica de la lectura: lo que se
+   ve en la estantería es lo que se abre. Debajo de cada una, lo justo para elegir —estado,
+   capítulos, palabras— con la línea del backend tal cual. */
+
+.biblioteca {
+  min-height: 100vh;
+}
+
+.biblioteca-cabecera {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  height: var(--alto-barra);
+  padding: 0 1.25rem;
+  background: var(--barra);
+  backdrop-filter: saturate(1.4) blur(12px);
+  -webkit-backdrop-filter: saturate(1.4) blur(12px);
+  border-bottom: 1px solid var(--linea);
+}
+
+.biblioteca-cabecera .marca-app {
+  color: var(--tinta);
+}
+
+.biblioteca-cuerpo {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 5rem;
+  display: grid;
+  gap: 2rem;
+}
+
+.biblioteca-titular {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.biblioteca-titular h1 {
+  font-size: clamp(1.6rem, 3.5vw, 2.2rem);
+}
+
+.biblioteca-estado {
+  min-height: 40vh;
+  justify-self: center;
+  max-width: 34rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.estanteria {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
+  gap: 2.5rem 1.75rem;
+}
+
+.libro-de-estante {
+  width: 100%;
+  display: grid;
+  gap: 0.9rem;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  color: var(--tinta);
+}
+
+.cubierta-libro.estante {
+  width: 100%;
+  padding: 1.5rem 1.1rem;
+  gap: 0.7rem;
+  text-align: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.libro-de-estante:hover .cubierta-libro.estante,
+.libro-de-estante:focus-visible .cubierta-libro.estante {
+  transform: translateY(-4px) rotate(-0.6deg);
+  box-shadow: var(--sombra-alta), 0 18px 40px rgb(40 30 10 / 18%);
+}
+
+.cubierta-libro.estante .antetitulo {
+  font-size: 0.58rem;
+}
+
+.estante-titulo {
+  font-family: var(--libro);
+  font-size: 1.3rem;
+  line-height: 1.2;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.cubierta-libro.estante .cubierta-para {
+  font-size: 0.85rem;
+}
+
+.estante-ficha {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0 0.15rem;
+}
+
+.estante-etiquetas {
+  display: flex;
+}
+
+.sello-aprobada.estatico {
+  cursor: inherit;
+  margin: 0;
+}
+
+.chip-estado {
+  display: inline-block;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--linea);
+  background: var(--superficie);
+  color: var(--tinta-suave);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.chip-estado.estado-escrita {
+  border-color: var(--marca);
+  color: var(--marca);
+}
+
+.chip-estado.estado-escribiendo,
+.chip-estado.estado-abriendo {
+  background: var(--marca-suave);
+}
+
+.chip-estado.estado-detenida,
+.chip-estado.estado-fallida {
+  border-color: var(--error);
+  color: var(--error);
+  background: var(--error-suave);
+}
+
+.estante-detalle {
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--tinta-suave);
+}
+
+.estante-cifras {
+  font-size: 0.78rem;
+  color: var(--apagado);
+  font-variant-numeric: tabular-nums;
+}
+
+.volver-biblioteca {
+  justify-self: start;
+  margin: -1rem 0 -0.75rem -0.6rem;
+}
+
+@media (max-width: 560px) {
+  .estanteria {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.75rem 1rem;
+  }
+
+  .biblioteca-cuerpo {
+    padding: 1.75rem 1rem 4rem;
+  }
+
+  .estante-titulo {
+    font-size: 1rem;
+  }
+
+  .cubierta-libro.estante {
+    padding: 1rem 0.7rem;
+  }
+}
+
+/* --- Eliminar (SPEC-009) --------------------------------------------------------------
+   Al final del Taller y en rojo, que es lo único rojo de la interfaz que no es un error:
+   una acción que no se deshace desde aquí tiene que verse distinta de las demás. */
+
+.bloque-peligro {
+  margin-top: 0.5rem;
+  padding: 1rem;
+  border-radius: var(--radio);
+  border: 1px solid color-mix(in srgb, var(--error) 45%, var(--linea));
+  background: color-mix(in srgb, var(--error-suave) 45%, transparent);
+}
+
+.bloque-peligro h3 {
+  color: var(--error);
+}
+
+.boton.peligro {
+  background: var(--superficie);
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.boton.peligro:hover:not(:disabled) {
+  background: var(--error);
+  color: var(--superficie);
+}
+
+/* --- Gastos (SPEC-012) ----------------------------------------------------------------
+   Cuatro cifras, dos desgloses de una sola serie y la tabla de llamadas. Las barras usan
+   --grafico, un color por tema validado contra su superficie (banda de luminosidad, croma
+   y contraste 3:1); el texto de los valores va en tinta, nunca en el color de la barra. */
+
+.panel.panel-ancho {
+  width: min(46rem, 96vw);
+}
+
+.gastos {
+  display: grid;
+  gap: 1.4rem;
+}
+
+.gastos-estado {
+  display: grid;
+  gap: 0.9rem;
+  justify-items: center;
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: var(--apagado);
+}
+
+.cifras {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.cifra {
+  display: grid;
+  align-content: start;
+  gap: 0.2rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--linea);
+  border-radius: var(--radio);
+  background: var(--fondo);
+  min-width: 0;
+}
+
+.cifra dt {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--apagado);
+}
+
+.cifra dd {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta);
+  overflow-wrap: anywhere;
+}
+
+.cifra-nota {
+  font-size: 0.74rem;
+  color: var(--apagado);
+}
+
+.langfuse-estado {
+  padding: 0.55rem 0.8rem;
+  border-radius: var(--radio);
+  background: var(--superficie-2);
+}
+
+.desgloses {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1.4rem;
+}
+
+.barras h3,
+.llamadas h3 {
+  font-family: var(--interfaz);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--apagado);
+  margin-bottom: 0.6rem;
+}
+
+.barras ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.barra-fila {
+  position: relative;
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.3rem 0.35rem;
+  border-radius: 6px;
+  outline: none;
+}
+
+.barra-fila:hover,
+.barra-fila:focus-visible {
+  background: var(--superficie-2);
+}
+
+.barra-fila:focus-visible {
+  box-shadow: 0 0 0 2px var(--marca);
+}
+
+.barra-nombre {
+  font-size: 0.84rem;
+  color: var(--tinta-suave);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.barra-carril {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: calc(100% - 5.5rem);
+  min-width: 0;
+}
+
+/* Barra fina, extremo redondeado de 4 px y recto en la base, que crece desde la base. */
+.barra-marca {
+  flex: none;
+  display: block;
+  height: 14px;
+  min-width: 2px;
+  background: var(--grafico);
+  border-radius: 0 4px 4px 0;
+}
+
+.barra-valor {
+  flex: none;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta);
+}
+
+.barra-tooltip {
+  position: absolute;
+  left: 7rem;
+  bottom: calc(100% + 4px);
+  z-index: 5;
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  background: var(--tinta);
+  color: var(--fondo);
+  font-size: 0.76rem;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.barra-fila:hover .barra-tooltip,
+.barra-fila:focus-visible .barra-tooltip {
+  opacity: 1;
+  transform: none;
+}
+
+.tabla-llamadas {
+  display: grid;
+  border: 1px solid var(--linea);
+  border-radius: var(--radio);
+  overflow: hidden;
+  font-size: 0.8rem;
+}
+
+.fila-llamada {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1.3fr) minmax(0, 1.2fr) 5rem 4.5rem 4.5rem 7.5rem;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.55rem 0.75rem;
+  border-top: 1px solid var(--linea);
+}
+
+.fila-llamada.cabecera {
+  border-top: none;
+  background: var(--superficie-2);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--apagado);
+}
+
+.fila-llamada.fallida {
+  background: color-mix(in srgb, var(--error-suave) 50%, transparent);
+}
+
+.fila-llamada .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.fila-llamada small,
+.apagado {
+  color: var(--apagado);
+}
+
+.chip-fallo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: 0.35rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--error-suave);
+  color: var(--error);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.enlace-traza {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--marca);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.enlace-traza:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 720px) {
+  .cifras {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fila-llamada.cabecera {
+    display: none;
+  }
+
+  .fila-llamada {
+    grid-template-columns: 1fr auto;
+    gap: 0.2rem 0.75rem;
+  }
+
+  .fila-llamada .num {
+    text-align: left;
+  }
+}
+
+/* --- Personajes (SPEC-011) --------------------------------------------------------------
+   Fichas, como las de «Quién es quién»: la persona destinataria primero y marcada, los
+   demás con su papel y su relación, y el formulario abierto dentro de la propia ficha. */
+
+.editor-personajes {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.fichas-personaje {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.ficha-personaje {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--linea);
+  border-radius: var(--radio);
+  background: var(--fondo);
+}
+
+.ficha-personaje.destinataria {
+  border-color: color-mix(in srgb, var(--marca) 45%, var(--linea));
+  background: var(--marca-suave);
+}
+
+.ficha-personaje.con-falta {
+  border-color: var(--error);
+}
+
+.ficha-personaje.editando {
+  display: block;
+  background: var(--superficie);
+  border-style: dashed;
+}
+
+.ficha-personaje-cuerpo {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.ficha-personaje-cuerpo strong {
+  font-family: var(--libro);
+  font-size: 1.02rem;
+  overflow-wrap: anywhere;
+}
+
+.ficha-personaje-meta {
+  font-size: 0.8rem;
+  color: var(--apagado);
+}
+
+.ficha-personaje-texto {
+  margin: 0.2rem 0 0;
+  font-family: var(--libro);
+  font-size: 0.92rem;
+  color: var(--tinta-suave);
+  overflow-wrap: anywhere;
+}
+
+.formulario-personaje {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 0.3rem;
+}
+
+.formulario-personaje .segmentado button {
+  font-size: 0.8rem;
+  padding: 0.5rem 0.3rem;
+}
+
+.formulario-acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.anadir-personaje {
+  justify-self: start;
+}
+
+.panel .formulario-personaje .fila-dos {
+  grid-template-columns: 1fr;
+}
+
+/* Seis pasos no caben en una línea de móvil: el indicador se desplaza dentro de sí mismo
+   en lugar de ensanchar la página (SPEC-011 los pasó de cinco a seis). */
+.pasos {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.pasos::-webkit-scrollbar {
+  display: none;
+}
+
+.paso {
+  white-space: nowrap;
+}
+
+.ficha-personaje-cuerpo .enlace {
+  justify-self: start;
 }

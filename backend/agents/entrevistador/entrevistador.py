@@ -24,8 +24,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from backend.domain.spec.encargo import Brief, Destinatario, ElementoPersonalizado
-from backend.domain.vocabularies import TipoDeElementoPersonalizado
+from backend.domain.errors import ErrorDeDominio
+from backend.domain.spec.encargo import (
+    LARGO_MAXIMO_DE_LA_DESCRIPCION,
+    LARGO_MAXIMO_DE_LA_RELACION,
+    LARGO_MAXIMO_DEL_NOMBRE,
+    MAXIMO_DE_PERSONAJES,
+    RELACION_DE_LA_DESTINATARIA,
+    Brief,
+    Destinatario,
+    ElementoPersonalizado,
+    PersonajeDeclarado,
+    clave_de_nombre,
+)
+from backend.domain.vocabularies import Relevancia, TipoDeElementoPersonalizado
 
 VERSION_DE_PROMPT = "1.0.0"
 PROMPTS = Path(__file__).parent / "prompts"
@@ -127,6 +139,9 @@ class Encargo:
     brief: Brief
     destinatario: Destinatario
     palabras_vetadas: tuple[str, ...] = ()
+    # La persona destinataria primero, siempre protagonista; despues, los demas en el
+    # orden en que se declararon (SPEC-011).
+    personajes: tuple[PersonajeDeclarado, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -189,7 +204,146 @@ def contradicciones(respuestas: Mapping[str, Any]) -> tuple[Contradiccion, ...]:
                 )
             )
 
+    nombre = respuestas.get("nombre")
+    _, problemas = leer_personajes(
+        nombre if isinstance(nombre, str) else "", respuestas.get("personajes"), prefijo="x"
+    )
+    choques.extend(problemas)
+
     return tuple(choques)
+
+
+def leer_personajes(
+    nombre_de_la_destinataria: str, crudos: object, *, prefijo: str
+) -> tuple[tuple[PersonajeDeclarado, ...], tuple[Contradiccion, ...]]:
+    """Los personajes declarados, con la destinataria delante, o lo que falla en ellos.
+
+    Lo usan la entrevista y la edicion desde el Taller, para que las dos digan lo mismo
+    del mismo personaje. La destinataria no la elige quien escribe la lista: sale del
+    nombre de la entrevista, es protagonista y su relacion es fija; de lo que se mande
+    para ella solo se toma la descripcion (SPEC-011 RF-PER-02).
+
+    Un problema se dice nombrando al personaje: «un personaje no vale» obligaria a
+    revisarlos todos (RF-PER-04).
+    """
+    problemas: list[Contradiccion] = []
+
+    def problema(quien: str, detalle: str) -> None:
+        problemas.append(Contradiccion(campos=("personajes", quien), detalle=detalle))
+
+    if crudos is None:
+        crudos = []
+    if not isinstance(crudos, (list, tuple)):
+        problema("personajes", "los personajes tienen que llegar como una lista")
+        return (), tuple(problemas)
+
+    descripcion_de_la_destinataria = ""
+    otros: list[object] = []
+    for crudo in crudos:
+        if isinstance(crudo, Mapping) and crudo.get("es_destinatario"):
+            descripcion_de_la_destinataria = str(crudo.get("descripcion") or "").strip()
+        else:
+            otros.append(crudo)
+
+    if 1 + len(otros) > MAXIMO_DE_PERSONAJES:
+        problema(
+            "personajes",
+            f"hay {1 + len(otros)} personajes y el maximo es {MAXIMO_DE_PERSONAJES}, "
+            "contando a la persona destinataria",
+        )
+
+    vistos: dict[str, str] = {}
+    destinataria = nombre_de_la_destinataria.strip()
+    if destinataria:
+        vistos[clave_de_nombre(destinataria)] = destinataria
+
+    validos: list[tuple[str, Relevancia, str, str]] = []
+    for numero, crudo in enumerate(otros, start=2):
+        if not isinstance(crudo, Mapping):
+            problema(
+                f"personaje {numero}",
+                f"el personaje {numero} no tiene la forma nombre, papel, relacion y "
+                "descripcion",
+            )
+            continue
+        nombre = str(crudo.get("nombre") or "").strip()
+        papel = str(crudo.get("papel") or "").strip()
+        relacion = str(crudo.get("relacion") or "").strip()
+        descripcion = str(crudo.get("descripcion") or "").strip()
+        quien = nombre or f"personaje {numero}"
+        if not nombre:
+            problema(quien, f"el personaje {numero} no tiene nombre")
+            continue
+        if len(nombre) > LARGO_MAXIMO_DEL_NOMBRE:
+            problema(
+                quien,
+                f"«{nombre[:20]}…» tiene {len(nombre)} caracteres de nombre y el maximo es "
+                f"{LARGO_MAXIMO_DEL_NOMBRE}",
+            )
+            continue
+        if papel not in {r.value for r in Relevancia}:
+            problema(
+                quien,
+                f"«{nombre}»: el papel «{papel}» no existe; hay protagonico, secundario y "
+                "ambiental",
+            )
+            continue
+        if len(relacion) > LARGO_MAXIMO_DE_LA_RELACION:
+            problema(
+                quien,
+                f"«{nombre}»: la relacion tiene {len(relacion)} caracteres y el maximo es "
+                f"{LARGO_MAXIMO_DE_LA_RELACION}",
+            )
+            continue
+        if len(descripcion) > LARGO_MAXIMO_DE_LA_DESCRIPCION:
+            problema(
+                quien,
+                f"«{nombre}»: la descripcion tiene {len(descripcion)} caracteres y el maximo "
+                f"es {LARGO_MAXIMO_DE_LA_DESCRIPCION}",
+            )
+            continue
+        clave = clave_de_nombre(nombre)
+        if clave in vistos:
+            igual = vistos[clave]
+            problema(
+                quien,
+                f"«{nombre}» se llama igual que la persona destinataria"
+                if destinataria and igual == destinataria
+                else f"«{nombre}» esta repetido: ya hay un personaje llamado «{igual}»",
+            )
+            continue
+        vistos[clave] = nombre
+        validos.append((nombre, Relevancia(papel), relacion, descripcion))
+
+    if problemas or not destinataria:
+        return (), tuple(problemas)
+
+    try:
+        personajes = [
+            PersonajeDeclarado(
+                id=f"{prefijo}-personaje-1",
+                nombre=destinataria,
+                papel=Relevancia.PROTAGONICO,
+                relacion=RELACION_DE_LA_DESTINATARIA,
+                descripcion=descripcion_de_la_destinataria,
+                es_destinatario=True,
+            )
+        ] + [
+            PersonajeDeclarado(
+                id=f"{prefijo}-personaje-{orden}",
+                nombre=nombre,
+                papel=papel,
+                relacion=relacion,
+                descripcion=descripcion,
+            )
+            for orden, (nombre, papel, relacion, descripcion) in enumerate(validos, start=2)
+        ]
+    except ErrorDeDominio as error:
+        # Lo unico que puede llegar aqui es la descripcion de la destinataria, que no pasa
+        # por los filtros de arriba.
+        problema(destinataria, str(error))
+        return (), tuple(problemas)
+    return tuple(personajes), ()
 
 
 def envolver_texto_no_confiable(texto: str) -> TextoNoConfiable:
@@ -273,8 +427,13 @@ def construir_encargo(brief_id: str, respuestas: Mapping[str, Any]) -> Encargo:
         dedicatoria=str(respuestas.get("dedicatoria", "")),
     )
     vetadas = tuple(str(p) for p in respuestas.get("palabras_vetadas", ()))
+    personajes, _ = leer_personajes(
+        destinatario.nombre, respuestas.get("personajes"), prefijo=brief_id
+    )
 
-    return Encargo(brief=brief, destinatario=destinatario, palabras_vetadas=vetadas)
+    return Encargo(
+        brief=brief, destinatario=destinatario, palabras_vetadas=vetadas, personajes=personajes
+    )
 
 
 def prompt_vigente() -> str:

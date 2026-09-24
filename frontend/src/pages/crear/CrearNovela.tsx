@@ -1,10 +1,16 @@
 import { useEffect, useState } from "react";
-import { cerrarEntrevista, ErrorDeLectura, type EntrevistaFallida } from "../../shared/api/lectura";
+import {
+  cerrarEntrevista,
+  ErrorDeLectura,
+  type EntrevistaFallida,
+  type PersonajeDeclarado,
+} from "../../shared/api/lectura";
 import { guardar, olvidar, recordar } from "../../shared/ui/almacen";
+import { EditorDePersonajes, NOMBRE_DEL_PAPEL } from "../../shared/ui/EditorDePersonajes";
 import { Etiquetas } from "../../shared/ui/Etiquetas";
 import { Icono } from "../../shared/ui/Icono";
 
-/** La primera pantalla: la entrevista, en cuatro pasos y un repaso.
+/** La primera pantalla: la entrevista, en cinco pasos y un repaso.
  *
  *  El formulario **no decide si algo es válido**. «Siguiente» no comprueba nada y «Crear
  *  el encargo» envía lo que haya; lo que falte o no encaje lo dice el backend, y aquí
@@ -23,6 +29,9 @@ interface Respuestas {
   dedicatoria: string;
   vetadas: string[];
   textoLibre: string;
+  // Los personajes que no son la destinataria, y la descripción de ella (SPEC-011).
+  personajes: PersonajeDeclarado[];
+  descripcionDeLaDestinataria: string;
 }
 
 const VACIAS: Respuestas = {
@@ -36,6 +45,8 @@ const VACIAS: Respuestas = {
   dedicatoria: "",
   vetadas: [],
   textoLibre: "",
+  personajes: [],
+  descripcionDeLaDestinataria: "",
 };
 
 /** Qué campos del backend viven en qué paso. Es un mapa de presentación: sirve para
@@ -43,6 +54,7 @@ const VACIAS: Respuestas = {
 const PASOS = [
   { titulo: "Para quién", lema: "Empecemos por la persona que va a recibirla.", campos: ["nombre", "edad", "rasgos"] },
   { titulo: "Lo que no puede faltar", lema: "Los recuerdos que harán que se reconozca en la historia.", campos: ["recuerdos"] },
+  { titulo: "Los personajes", lema: "Quién más sale en la historia, además de quien la recibe.", campos: ["personajes"] },
   { titulo: "La historia", lema: "Qué clase de libro quieres regalar.", campos: ["genero", "tono", "extension"] },
   { titulo: "El toque final", lema: "La dedicatoria, lo que no quieres ver y lo que quieras contar.", campos: ["dedicatoria", "palabras_vetadas", "texto_libre"] },
 ] as const;
@@ -50,7 +62,14 @@ const REPASO = PASOS.length;
 
 const CLAVE = "entrevista";
 
-export function CrearNovela({ alCrear }: { alCrear: (volumenId: string) => void }) {
+export function CrearNovela({
+  alCrear,
+  alVolver,
+}: {
+  alCrear: (volumenId: string) => void;
+  /** Vuelve a la biblioteca, si hay alguna novela a la que volver (SPEC-008 RF-BIB-07). */
+  alVolver?: () => void;
+}) {
   const [r, setR] = useState<Respuestas>(() => recordar(CLAVE, VACIAS));
   const [paso, setPaso] = useState(() => recordar(`${CLAVE}:paso`, { n: 0 }).n);
 
@@ -67,7 +86,15 @@ export function CrearNovela({ alCrear }: { alCrear: (volumenId: string) => void 
 
   const huecos: string[] = fallo?.huecos ?? [];
   const falta = (campo: string) => huecos.includes(campo);
-  const pasoConFalta = (n: number) => PASOS[n].campos.some((c) => huecos.includes(c));
+  // Un personaje mal formado llega como contradicción, no como hueco: su paso también
+  // se marca, y la ficha que el backend nombró lleva su «falta».
+  const choques = fallo?.contradicciones ?? [];
+  const camposConFalta = [...huecos, ...choques.flatMap((c) => c.campos)];
+  const pasoConFalta = (n: number) =>
+    PASOS[n].campos.some((c: string) => camposConFalta.includes(c));
+  const personajesConFalta = choques
+    .filter((c) => c.campos[0] === "personajes")
+    .map((c) => c.campos[1]);
 
   function olvidarBorrador() {
     olvidar(CLAVE);
@@ -99,6 +126,18 @@ export function CrearNovela({ alCrear }: { alCrear: (volumenId: string) => void 
           extension: r.extension === "" ? "" : Number(r.extension),
           dedicatoria: r.dedicatoria,
           palabras_vetadas: r.vetadas,
+          // La destinataria va marcada: su nombre y su papel los pone el backend, y de lo
+          // que se envía para ella solo toma la descripción (RF-PER-02).
+          personajes: [
+            {
+              nombre: r.nombre,
+              papel: "protagonico",
+              relacion: "",
+              descripcion: r.descripcionDeLaDestinataria,
+              es_destinatario: true,
+            },
+            ...r.personajes,
+          ],
         },
         r.textoLibre,
       );
@@ -115,7 +154,13 @@ export function CrearNovela({ alCrear }: { alCrear: (volumenId: string) => void 
       if (problema instanceof ErrorDeLectura && problema.estado === 422) {
         const detalle = problema.detalle as EntrevistaFallida;
         setFallo(detalle);
-        const primero = PASOS.findIndex((p) => p.campos.some((c) => detalle.huecos?.includes(c)));
+        const conFalta = [
+          ...(detalle.huecos ?? []),
+          ...(detalle.contradicciones ?? []).flatMap((c) => c.campos),
+        ];
+        const primero = PASOS.findIndex((p) =>
+          p.campos.some((c: string) => conFalta.includes(c)),
+        );
         if (primero >= 0) setPaso(primero);
       } else {
         setError(problema instanceof Error ? problema.message : String(problema));
@@ -172,6 +217,12 @@ export function CrearNovela({ alCrear }: { alCrear: (volumenId: string) => void 
       </aside>
 
       <main className="entrevista-principal">
+        {alVolver ? (
+          // Lo escrito se queda: el borrador vive en el navegador (RF-INT-05 de SPEC-005).
+          <button type="button" className="boton fantasma volver-biblioteca" onClick={alVolver}>
+            <Icono nombre="anterior" tamano={16} /> Volver a la biblioteca
+          </button>
+        ) : null}
         <ol className="pasos" aria-label="Pasos de la entrevista">
           {[...PASOS.map((p) => p.titulo), "Repaso"].map((titulo, n) => (
             <li key={titulo}>
@@ -201,7 +252,8 @@ export function CrearNovela({ alCrear }: { alCrear: (volumenId: string) => void 
               <span>
                 {fallo.contradicciones.map((c) => (
                   <span key={c.campos.join("-")} className="contradiccion">
-                    <strong>{c.campos.join(" y ")}</strong>: {c.detalle}
+                    <strong>{c.campos[0] === "personajes" ? "Personajes" : c.campos.join(" y ")}</strong>
+                    : {c.detalle}
                   </span>
                 ))}
               </span>
@@ -267,6 +319,17 @@ export function CrearNovela({ alCrear }: { alCrear: (volumenId: string) => void 
             ) : null}
 
             {paso === 2 ? (
+              <EditorDePersonajes
+                destinataria={r.nombre}
+                descripcionDeLaDestinataria={r.descripcionDeLaDestinataria}
+                otros={r.personajes}
+                alCambiarDescripcion={(d) => poner("descripcionDeLaDestinataria", d)}
+                alCambiarOtros={(p) => poner("personajes", p)}
+                conFalta={personajesConFalta}
+              />
+            ) : null}
+
+            {paso === 3 ? (
               <>
                 <div className="fila-dos">
                   <Campo etiqueta="Género" falta={falta("genero")}>
@@ -286,7 +349,7 @@ export function CrearNovela({ alCrear }: { alCrear: (volumenId: string) => void 
               </>
             ) : null}
 
-            {paso === 3 ? (
+            {paso === 4 ? (
               <>
                 <Campo etiqueta="Dedicatoria" falta={falta("dedicatoria")}>
                   <input value={r.dedicatoria} onChange={(e) => poner("dedicatoria", e.target.value)} placeholder="Para quien siempre…" />
@@ -318,10 +381,26 @@ export function CrearNovela({ alCrear }: { alCrear: (volumenId: string) => void 
                     <ul>{r.recuerdos.map((x, i) => <li key={i}>{x}</li>)}</ul>
                   ) : <Vacio />}
                 </Repaso>
-                <Repaso titulo="La historia" alEditar={() => setPaso(2)} conFalta={pasoConFalta(2)}>
+                <Repaso titulo="Personajes" alEditar={() => setPaso(2)} conFalta={pasoConFalta(2)}>
+                  <ul>
+                    <li>
+                      {r.nombre || <Vacio />} <span className="repaso-lista">· protagonista, a quien va dedicada</span>
+                    </li>
+                    {r.personajes.map((p, i) => (
+                      <li key={i}>
+                        {p.nombre || <Vacio texto="Sin nombre" />}{" "}
+                        <span className="repaso-lista">
+                          · {NOMBRE_DEL_PAPEL[p.papel] ?? p.papel}
+                          {p.relacion ? `, ${p.relacion}` : ""}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </Repaso>
+                <Repaso titulo="La historia" alEditar={() => setPaso(3)} conFalta={pasoConFalta(3)}>
                   {[r.genero, r.tono, r.extension && `${Number(r.extension).toLocaleString("es-ES")} palabras`].filter(Boolean).join(" · ") || <Vacio />}
                 </Repaso>
-                <Repaso titulo="El toque final" alEditar={() => setPaso(3)} conFalta={pasoConFalta(3)}>
+                <Repaso titulo="El toque final" alEditar={() => setPaso(4)} conFalta={pasoConFalta(4)}>
                   {r.dedicatoria ? <em>«{r.dedicatoria}»</em> : <Vacio texto="Sin dedicatoria" />}
                   {r.vetadas.length > 0 ? <span className="repaso-lista">Sin: {r.vetadas.join(", ")}</span> : null}
                   {r.textoLibre ? <span className="repaso-lista">Con texto libre ({r.textoLibre.length} caracteres)</span> : null}

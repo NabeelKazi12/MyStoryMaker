@@ -180,6 +180,8 @@ Este plano describe cómo se selecciona, ordena y verbaliza el material diegéti
 
 Cada nivel tiene `presupuesto_de_palabras` (objetivo y tolerancia), `orden` y `resumen` (D). El presupuesto es lo que impide que el acto tercero se coma el 60% del libro.
 
+El `Volumen` lleva además `eliminada_en`, vacío mientras la novela existe (D-23). Una novela eliminada se **retira**, no se borra: sus capítulos, escenas, borradores, canon, versiones y aprobaciones se conservan, pero no se lista ni se sirve por ninguna ruta. No se elimina una novela con aprobación vigente ni con la escritura en curso.
+
 El `Capítulo` tiene además `título`, que lo declara el reparto y no la escritura. Sin él, la lectura no tiene más remedio que llamar «Capítulo 3» al capítulo 3, y un índice numerado no dice de qué va nada: es la diferencia entre poder elegir por dónde seguir leyendo y tener que abrirlos todos.
 
 ### Escena
@@ -321,6 +323,14 @@ Condición que debe cumplirse para avanzar de fase. Atributos: `fase`, `comproba
 
 Qué puertas existen, cuándo se evalúan y con qué política —bloqueante o advertencia— está en `architecture.md` §7.3. Aquí solo está la clase; los invariantes que cada puerta cobra están en el apartado «Invariantes y reglas de validación».
 
+### AprobacionDeVolumen
+
+Firma de una persona sobre una versión publicada de la novela. Es la evidencia `humano` de *promesa al lector* en la puerta *Volumen cerrado* (D-22).
+
+Atributos: `volumen` → Volumen, `versión` → versión publicada, `aprobada_en`, `retirada_en` (vacío mientras está vigente).
+
+Invariantes: una aprobación nunca se borra —reabrir la novela la retira con fecha—, y un volumen tiene como mucho una vigente. Mientras hay una vigente, la novela no se reescribe, no admite cambios del lector y no se retitula. Aprobar no cambia el estado de ningún `Borrador`.
+
 ### RegistroDeDecisión
 
 Decisión creativa tomada, con su alternativa descartada y su motivo.
@@ -331,7 +341,9 @@ En obras largas la deriva rara vez viene de mala prosa: viene de decisiones olvi
 
 ### Procedencia
 
-Registro de cómo se generó un artefacto: `agente`, `modelo`, `versión_de_prompt`, `paquete_de_contexto` → PaqueteDeContexto, `parámetros_de_muestreo`, `coste`, `latencia`, `timestamp`.
+Registro de cómo se generó un artefacto: `agente`, `modelo`, `versión_de_prompt`, `paquete_de_contexto` → PaqueteDeContexto, `parámetros_de_muestreo`, `coste`, `latencia`, `tokens_entrada`, `tokens_salida`, `timestamp`.
+
+Los tokens son los que devolvió el cliente del modelo; vacíos cuando no hubo respuesta y en las procedencias anteriores a SPEC-012. La suma de las procedencias de una novela es su gasto, y es lo que enseña la pestaña «Gastos»; Langfuse recibe cada una como traza con el mismo id (D-24).
 
 El enlace al `PaqueteDeContexto` es el atributo que convierte un fallo de coherencia en algo reproducible: permite ver exactamente qué sabía el agente cuando falló.
 
@@ -368,6 +380,14 @@ Atributos: `id`, `tipo` (`recuerdo` / `rasgo` / `vínculo`), `contenido`, `oblig
 `obligatorio` no es un adorno: separa lo que un validador exige encontrar en algún capítulo
 de lo que solo enriquece si cabe. Marcarlo todo como obligatorio convierte ese validador en
 un bloqueo permanente; no marcar nada lo convierte en decorativo.
+
+### PersonajeDeclarado
+
+Alguien que quien encarga quiere ver en la novela, dicho antes de escribirla (SPEC-011, D-25).
+
+Atributos: `nombre`, `papel` (`relevancia`: protagónico / secundario / ambiental), `relación` con el destinatario, `descripción`, `es_destinatario`.
+
+Vive en la capa de especificación, no en el canon: declarar es encargar. El destinatario se declara siempre, protagonista y con la relación «a quien va dedicada». Como mucho doce por encargo, con nombres únicos sin distinguir mayúsculas ni acentos. La apertura tiene que proponerlos todos con su nombre y su papel, y cada uno tiene que salir en la historia —participar en un evento o ser el POV de una escena—; si no, el plan se rechaza entero, como con los recuerdos obligatorios. Se editan hasta que empieza la escritura; después, cambiarlos es un cambio del lector.
 
 ### EventoDeCronologia
 
@@ -561,7 +581,7 @@ Las reglas se agrupan por severidad, que determina qué hace el orquestador al d
 2. Todo hilo con resolución o abandono declarado.
 3. Toda pregunta dramática de hilo principal respondida.
 4. Arco de cada protagónico con estado terminal.
-5. Promesa al lector del `Brief` satisfecha (juicio, no programa).
+5. Promesa al lector del `Brief` satisfecha (juicio humano, no programa: la evidencia es la `AprobacionDeVolumen`).
 
 ### De advertencia (penalizan, no bloquean)
 

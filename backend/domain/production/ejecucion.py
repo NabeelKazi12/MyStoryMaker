@@ -36,6 +36,10 @@ class Procedencia:
     coste: float = 0.0
     latencia_ms: int = 0
     clase_de_fallo: ClaseDeFallo | None = None
+    # Los que devolvio el cliente del modelo. `None` cuando no hubo respuesta -la llamada
+    # no llego a salir o fallo antes de contestar- y en las filas de antes de SPEC-012.
+    tokens_entrada: int | None = None
+    tokens_salida: int | None = None
 
 
 @dataclass(frozen=True, kw_only=True)

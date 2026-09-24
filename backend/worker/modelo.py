@@ -417,6 +417,16 @@ def _lista(prompt: str, nombre: str) -> list[tuple[str, str]]:
     ]
 
 
+def _personajes_declarados(prompt: str) -> list[tuple[str, str, str]]:
+    """Las filas `personaje declarado | nombre | papel | relacion | descripcion`."""
+    declarados = []
+    for coincidencia in re.finditer(r"^personaje declarado \|(.+)$", prompt, re.M):
+        campos = [campo.strip() for campo in coincidencia.group(1).split("|")]
+        if len(campos) >= 2 and campos[0]:
+            declarados.append((campos[0], campos[1], campos[2] if len(campos) > 2 else ""))
+    return declarados
+
+
 def _identificador(texto: str, prefijo: str, numero: int) -> str:
     """Un id legible y estable. Estable importa: la apertura tiene que ser idempotente."""
     limpio = re.sub(r"[^a-z0-9]+", "-", texto.lower()).strip("-")[:20] or "sin-nombre"
@@ -491,8 +501,28 @@ def _apertura_de_demostracion(prompt: str) -> str:
     protagonista = _identificador(nombre, "pe", 1)
     personajes = [
         f"- {protagonista} | {nombre} | protagonico | reconocerse en lo que le contaron",
-        "- pe-2-voz-que-recuerda | La voz que recuerda | secundario | contar sin adornar",
     ]
+    # Los que quien encarga declaro, con su papel: la apertura de demostracion tambien
+    # tiene que pasar la comprobacion de SPEC-011, o una muestra no demostraria nada. La
+    # destinataria ya va arriba, con el nombre del campo `destinatario`. Cada declarado
+    # recibe despues su propio evento y su escena, porque «aparecer» es salir en la
+    # historia, no estar en la lista.
+    declarados: list[tuple[str, str]] = []
+    for numero, (declarado, papel, relacion) in enumerate(
+        _personajes_declarados(prompt), start=2
+    ):
+        if declarado.casefold() == nombre.casefold():
+            continue
+        identificador = _identificador(declarado, "pe", numero)
+        declarados.append((identificador, declarado.replace("|", "/")))
+        necesidad = f"estar a la altura de lo que es para {nombre}" + (
+            f": {relacion}" if relacion else ""
+        )
+        personajes.append(f"- {identificador} | {declarado} | {papel} | {necesidad}")
+    if len(personajes) == 1:
+        personajes.append(
+            "- pe-2-voz-que-recuerda | La voz que recuerda | secundario | contar sin adornar"
+        )
     personajes = [f"{fila} | -" for fila in personajes]
 
     lugares: list[str] = []
@@ -520,6 +550,24 @@ def _apertura_de_demostracion(prompt: str) -> str:
             f"- esc-{numero} | {numero} | {protagonista} | {lugar} | {numero * 10} | "
             f"volver a {recuerdo} | {conflicto} | {resultado} | {entrada} | {salida} | "
             f"{'climax' if numero == len(recuerdos) else 'complicacion'} | accion | {evento}"
+        )
+
+    # Una escena por declarado, repartidas entre los capitulos: cada uno, con su punto de
+    # vista, acompaña a la destinataria en uno de sus recuerdos.
+    for posicion, (identificador, declarado) in enumerate(declarados, start=1):
+        capitulo = (posicion - 1) % len(recuerdos) + 1
+        recuerdo = recuerdos[capitulo - 1][1].replace("|", "/")
+        lugar = _identificador(recuerdo, "lu", capitulo)
+        evento = f"ev-{capitulo}-{identificador}"
+        momento = capitulo * 10 + posicion
+        eventos.append(
+            f"- {evento} | {declarado} acompaña a {nombre} | {momento} | encuentro | "
+            f"{lugar} | {identificador}"
+        )
+        escenas.append(
+            f"- esc-{capitulo}-{identificador} | {capitulo} | {identificador} | {lugar} | "
+            f"{momento} | estar junto a {nombre} | no saber que decir | lo dice a su manera | "
+            f"distancia | cercania | complicacion | dialogo | {evento}"
         )
 
     hechos = [f"- he-{numero}" for numero in range(1, len(recuerdos) + 1)]
