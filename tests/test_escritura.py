@@ -888,3 +888,46 @@ def test_si_ningun_candidato_valida_se_para_y_el_credito_vuelve_a_cero(
     assert not esta_abierta(conn, volumen_id)
     assert cliente.invocaciones == 3 * 4
     assert semaforo.en_vuelo == 0
+
+
+# --- pedir la escritura dos veces no deja la novela atascada ---------------------------
+
+
+def _planes(conn: sqlite3.Connection, volumen_id: str) -> int:
+    return int(
+        conn.execute(
+            "SELECT COUNT(*) AS n FROM plan WHERE volumen_id = ?", (volumen_id,)
+        ).fetchone()["n"]
+    )
+
+
+@pytest.mark.invariants
+def test_volver_a_pedir_una_novela_escrita_no_crea_un_plan_vacio(
+    conn: sqlite3.Connection,
+) -> None:
+    """Un segundo plan sin tareas dejaba el progreso en «abriendo» para siempre, la
+    pantalla sondeando sin fin y la novela imposible de eliminar."""
+    volumen_id = _novela(conn)
+    _escribir(conn, volumen_id)
+    assert progreso(conn, volumen_id).estado == "escrita"
+
+    otra = encolar_escritura(conn, volumen_id, ModoDeEscritura.DEMOSTRACION)
+
+    assert _planes(conn, volumen_id) == 1
+    assert otra.ya_estaba_abierta is True
+    assert otra.tareas
+    assert progreso(conn, volumen_id).estado == "escrita"
+
+
+@pytest.mark.invariants
+def test_volver_a_pedirla_mientras_se_abre_devuelve_el_mismo_plan(
+    conn: sqlite3.Connection,
+) -> None:
+    volumen_id = _novela(conn)
+    primera = encolar_escritura(conn, volumen_id, ModoDeEscritura.DEMOSTRACION)
+
+    segunda = encolar_escritura(conn, volumen_id, ModoDeEscritura.DEMOSTRACION)
+
+    assert segunda.plan_id == primera.plan_id
+    assert _planes(conn, volumen_id) == 1
+    assert progreso(conn, volumen_id).estado == "abriendo"

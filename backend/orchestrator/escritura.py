@@ -118,6 +118,17 @@ def encolar_escritura(
     """
     exigir_con_que_escribir(modo)
     encargo = leer_encargo(conn, volumen_id)
+
+    # Pedirla otra vez devuelve el plan que ya tiene, en lugar de crear uno. Las tareas se
+    # identifican por escena, no por plan: las de un plan nuevo chocaban con las del
+    # anterior y ese plan quedaba vacio. Como el progreso lee el plan mas reciente, la
+    # novela se quedaba en «abriendo» para siempre, la pantalla sondeaba sin fin y la
+    # eliminacion la rechazaba por estar «en marcha». Pedirla mientras se abria ni siquiera
+    # llegaba ahi: la apertura repetida reventaba con un 500.
+    existente = _plan_con_tareas(conn, volumen_id)
+    if existente is not None:
+        return existente
+
     plan_id = f"pl-{uuid.uuid4().hex[:8]}"
     conn.execute(
         "INSERT INTO plan (id, objetivo, volumen_id, modo) VALUES (?, ?, ?, ?)",
@@ -137,6 +148,33 @@ def encolar_escritura(
         modo=modo,
         tareas=tareas,
         ya_estaba_abierta=abierta,
+    )
+
+
+def _plan_con_tareas(conn: Conexion, volumen_id: str) -> EscrituraEncolada | None:
+    """El plan mas reciente de la novela que ya tiene tareas, si lo hay."""
+    plan = conn.execute(
+        """
+        SELECT p.id, p.modo FROM plan p
+        WHERE p.volumen_id = ? AND EXISTS (SELECT 1 FROM tarea t WHERE t.plan_id = p.id)
+        ORDER BY p.rowid DESC LIMIT 1
+        """,
+        (volumen_id,),
+    ).fetchone()
+    if plan is None:
+        return None
+    tareas = tuple(
+        fila["id"]
+        for fila in conn.execute(
+            "SELECT id FROM tarea WHERE plan_id = ? ORDER BY rowid", (plan["id"],)
+        )
+    )
+    return EscrituraEncolada(
+        plan_id=plan["id"],
+        volumen_id=volumen_id,
+        modo=ModoDeEscritura(plan["modo"]),
+        tareas=tareas,
+        ya_estaba_abierta=esta_abierta(conn, volumen_id),
     )
 
 
