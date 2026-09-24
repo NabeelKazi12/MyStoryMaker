@@ -180,6 +180,8 @@ Este plano describe cómo se selecciona, ordena y verbaliza el material diegéti
 
 Cada nivel tiene `presupuesto_de_palabras` (objetivo y tolerancia), `orden` y `resumen` (D). El presupuesto es lo que impide que el acto tercero se coma el 60% del libro.
 
+El `Capítulo` tiene además `título`, que lo declara el reparto y no la escritura. Sin él, la lectura no tiene más remedio que llamar «Capítulo 3» al capítulo 3, y un índice numerado no dice de qué va nada: es la diferencia entre poder elegir por dónde seguir leyendo y tener que abrirlos todos.
+
 ### Escena
 
 Unidad continua de narración en un lugar, un tiempo y un punto de vista, que produce un cambio de valor.
@@ -342,6 +344,41 @@ Es el contrato del encargo: lo que la capa de calidad usa como referencia para m
 Atributos: `género`, `subgénero`, `obras_comparables[]`, `audiencia`, `tono`, `extensión_objetivo`, `pov_objetivo`, `premisa`, `logline`, `promesa_al_lector`, `tabúes[]`, `idioma`, `mercado`.
 
 La `promesa_al_lector` merece atención especial: es el compromiso implícito del género (un misterio se resuelve, un romance culmina) y su incumplimiento es el fallo de calidad más grave y menos detectable frase a frase.
+
+### Destinatario
+
+Para quien se escribe la novela. Es lo que separa un generador de novelas de un regalo, y
+lo que hace **verificable** la personalización: sin nombre no hay nada que comparar contra
+la story bible, y sin elemento obligatorio no hay nada que buscar en los capítulos.
+
+Atributos: `id`, `nombre`, `edad`, `rasgos[]`, `elementos[]` → ElementoPersonalizado,
+`dedicatoria`.
+
+Invariantes: el nombre no está vacío —es lo que el validador de nombres compara carácter a
+carácter—, la edad es un número de años positivo —es una de las dos patas de la
+contradicción que el entrevistador detecta— y todo destinatario aporta al menos un
+`ElementoPersonalizado` obligatorio.
+
+### ElementoPersonalizado
+
+Algo del destinatario que la novela tiene que llevar dentro.
+
+Atributos: `id`, `tipo` (`recuerdo` / `rasgo` / `vínculo`), `contenido`, `obligatorio`.
+
+`obligatorio` no es un adorno: separa lo que un validador exige encontrar en algún capítulo
+de lo que solo enriquece si cabe. Marcarlo todo como obligatorio convierte ese validador en
+un bloqueo permanente; no marcar nada lo convierte en decorativo.
+
+### EventoDeCronologia
+
+Proyección del canon —evento, momento, lugar y quién estaba— que alimenta al validador
+formal. **No es una clase persistida**: se deriva de `EventoNarrativo`, y una cronología
+declarada aparte diverge del canon en cuanto alguien edita un evento, con lo que la
+verificación formal pasaría a comprobar una historia distinta de la que se lee (rd-d19).
+
+Un `EventoNarrativo` gana para esto un atributo `momento`, que lo **fecha** en tiempo de
+historia; `posición_en_tiempo_de_historia` solo lo **ordena**, y con un orden no se puede
+decir qué edad tenía nadie. Un `Personaje` gana `año_de_nacimiento` por la misma razón.
 
 ### Restricción
 

@@ -17,3 +17,7 @@ dist/
 # Sistema
 .DS_Store
 Thumbs.db
+.env
+
+# Cache de TypeScript
+*.tsbuildinfo

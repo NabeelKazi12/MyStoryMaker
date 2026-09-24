@@ -966,6 +966,10 @@ volver a discutirla.
 | D-15 | Todo se encola; solo se rechaza lo que no cabe ni en un sistema vacío | FIFO puro: deja una canonización detrás de veinte reescrituras | §6.6 |
 | D-16 | El orden del paquete es el del contrato de rol y es parte del contrato | Adelantar la voz al segundo puesto para ampliar el prefijo cacheable: contradice `AGENTS.md` §4.5 y cambia el `hash` | §4.7 |
 | D-17 | Los roles que escriben prosa usan `claude-haiku-4-5`, sin pensamiento extendido y sin `effort` | `claude-opus-5`, que registraba R-1 de `specs/spec1.md`: cinco veces el precio por token para un producto cuyo coste ya no dominaba, y que además ocultaba que la calidad de prosa nunca se había medido contra la rúbrica | §5.1 |
+| D-18 | El destinatario es una clase del dominio con sus elementos personalizados | Nombre, edad y recuerdos como columnas sueltas de `Brief`: no distinguen lo obligatorio de lo que solo enriquece, y la personalización deja de ser verificable | `definitions.md` |
+| D-19 | La cronología es una vista derivada del canon, no una tabla propia | Una tabla mantenida en paralelo: cuando se desincroniza, Lean verifica una historia que ya no es la que se lee, y da falsos verdes | §3.1 |
+| D-20 | El modo de demostración existe, es explícito y se declara en la `Procedencia` con `modelo = demostracion` | Caer en prosa fabricada cuando no hay credencial: es la bajada silenciosa que D-08 prohíbe, y produce una novela que nadie sabe que no es del modelo. La otra alternativa —no tener modo de demostración— deja el recorrido inobservable hasta que haya clave | §5.1 |
+| D-21 | La lectura sirve el borrador **no aceptado**, marcado como tal y con el motivo | Esperar a que `escena_limpia` lo acepte: en v1 esa puerta siempre trae evidencia ausente, así que esperar es esperar para siempre y la lectura queda vacía sin que nada lo explique | §6.2 |
 
 ---
 

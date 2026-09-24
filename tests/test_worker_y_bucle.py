@@ -34,7 +34,9 @@ from backend.store.repositories import CanonVersionado
 from backend.worker.modelo import (
     MAX_TOKENS_REDACCION,
     MODELO_DEL_REDACTOR,
+    VARIABLE_DE_CREDENCIAL,
     ClienteFalso,
+    CredencialAusente,
     FalloDeInvocacion,
     Respuesta,
     construir_cliente_real,
@@ -198,11 +200,20 @@ def test_una_salida_truncada_al_techo_es_fallo_de_contrato() -> None:
 
 
 @pytest.mark.invariants
-def test_el_cliente_real_no_arranca_sin_confirmar_el_modelo() -> None:
-    """La salvedad de D-17, hecha codigo: no se invoca a ciegas."""
-    with pytest.raises(NotImplementedError) as error:
+def test_el_cliente_real_no_arranca_sin_credencial(monkeypatch: pytest.MonkeyPatch) -> None:
+    """SPEC-004 C-1: el cliente ya esta cableado, y sin credencial dice que le falta.
+
+    Hasta SPEC-004 esta funcion lanzaba `NotImplementedError` citando D-17. La salvedad de
+    D-17 sigue en pie -el identificador del modelo no se ha contrastado contra la API de
+    modelos- pero ya no se sostiene negandose a construir el cliente: se sostiene en que un
+    modelo inexistente vuelve como fallo de contrato con el mensaje entero del proveedor.
+    """
+    monkeypatch.delenv(VARIABLE_DE_CREDENCIAL, raising=False)
+
+    with pytest.raises(CredencialAusente) as error:
         construir_cliente_real()
-    assert "D-17" in str(error.value)
+
+    assert VARIABLE_DE_CREDENCIAL in str(error.value)
 
 
 # --- criterio 1: el bucle completo ---------------------------------------------------

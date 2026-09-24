@@ -600,3 +600,32 @@ Miran la ejecución —`Procedencia`, `Puerta`, `Tarea`, el índice, el semáfor
 que es lo que sigue registrado cuando el texto ya no dice nada sobre lo que
 falló. Un fallo silencioso no se detecta leyendo mejor; se detecta mirando otra
 cosa.
+
+
+---
+
+## 13. Validadores de la novela de regalo (SPEC-003)
+
+Los que entran con el producto personalizado. La regla que los ordena es la misma del
+resto del documento: **solo lo determinista bloquea**.
+
+| Validador | Punto de ejecución | Método | Clase | Autoridad | Qué **no** comprueba |
+| --- | --- | --- | --- | --- | --- |
+| `guardarrail_palabras_prohibidas` | Hook de policy | Comparación normalizada contra tres listas en SQLite | T | Bloqueante | Si el término *debería* estar vetado: eso lo decide el cliente o la política global |
+| `nombres_exactos` | Hook de capítulo | Comparación carácter a carácter contra la story bible, más distancia uno | T | Bloqueante | Que el destinatario aparezca: eso es del validador de elementos |
+| `longitud_de_capitulo` | Hook de capítulo | Recuento de palabras contra el rango declarado | T | Bloqueante | Si el capítulo dice algo: un capítulo vacío de contenido puede medir bien |
+| `elementos_obligatorios_presentes` | Puerta previa a publicar | Consulta a `hecho_capitulo` | T | Bloqueante | Si el elemento está **bien integrado**: eso es rúbrica |
+| Validación visual (browser MCP) | Puerta previa a publicar | Recorrido por la lectura publicada, con aserción por elemento | T | Bloqueante | Si la maquetación se lee bien: eso es inspección humana |
+| Invariantes de cronología (Lean) | Puerta previa a publicar | `lake build` sobre la cronología generada | A | Bloqueante | Nada sobre la prosa: Lean no lee texto |
+| Juez con rúbrica | Rol editor | Puntuación por criterio con justificación | D | **Penaliza** | No bloquea: su puntuación varía entre llamadas sobre el mismo texto |
+| Revisión humana | Cierre | Una novela completa con la misma rúbrica | I | Penaliza | — |
+| Invariantes del harness (TLC) | Desarrollo y tubería | Comprobación de modelos sobre 5 capítulos y 2 reintentos | A | Bloquea el cambio | Nada sobre la obra: modela el proceso |
+
+### 13.1 Huecos declarados de este bloque
+
+- **`contar_tokens` sigue siendo una heurística.** El techo de 100.000 vale lo que valga
+  esa cuenta hasta que se sustituya por el recuento del proveedor.
+- **La normalización del guardarraíl es mínima a propósito.** `Rikardo` lo esquiva, y está
+  aceptado: el coste del falso positivo —bloquear un capítulo correcto— se consideró peor.
+- **El juez y el writer pueden compartir modelo**, con lo que sigue vigente F-07 y su
+  validador V-07.

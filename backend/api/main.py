@@ -21,6 +21,7 @@ from fastapi import Depends, FastAPI, HTTPException, Response, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from backend.domain.vocabularies import ModoDeEscritura
 from backend.store import database
 from backend.store.database import Conexion as ConexionDelStore
 
@@ -34,9 +35,37 @@ app = FastAPI(
 
 
 def obtener_conexion() -> Iterator[Conexion]:
-    """Dependencia de conexion. `store/` es el unico que abre SQLite."""
+    """Dependencia de conexion. `store/` es el unico que abre SQLite.
+
+    Comprueba que la base esta migrada antes de servir nada. SQLite **crea** el fichero
+    al conectarse, asi que una ruta equivocada no falla: produce una base vacia, y la
+    primera consulta muere con «no such table» y un 500 sin cuerpo. El sintoma real -la
+    variable de entorno sin poner- queda a dos saltos del mensaje, y hay que ir a los
+    logs del servidor para verlo.
+    """
     with database.conexion() as conn:
+        if not _esta_migrada(conn):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    f"La base de datos {database.ruta_de_la_base()} no esta migrada: no "
+                    f"tiene tablas. Comprueba que MYSTORYMAKER_DB apunta a la base "
+                    f"correcta y ejecuta «uv run alembic upgrade head»."
+                ),
+            )
         yield conn
+
+
+def _esta_migrada(conn: Conexion) -> bool:
+    """Si el esquema existe. Se mira una tabla del canon, no `alembic_version`.
+
+    Una base sellada por Alembic pero sin tablas -que pasa si alguien sella a mano- es
+    tan inutil como una vacia, y este predicado tiene que decir que no en los dos casos.
+    """
+    fila = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'volumen'"
+    ).fetchone()
+    return fila is not None
 
 
 Conexion = Annotated[ConexionDelStore, Depends(obtener_conexion)]
@@ -293,3 +322,405 @@ def catalogo_de_predicados(conn: Conexion) -> list[dict[str, Any]]:
         "SELECT nombre, exclusividad, descripcion FROM predicado ORDER BY nombre"
     ).fetchall()
     return [dict(f) for f in filas]
+
+
+# --- SPEC-003, fase E: las rutas de lectura ------------------------------------------
+# Son de solo lectura y viven aqui porque `api/` encola y lee estado (CLAUDE.md 4). La
+# peticion de cambio del lector no regenera nada desde la ruta: encola una Tarea y
+# devuelve 202, como toda generacion.
+
+
+class PeticionDeCambio(BaseModel):
+    """Lo que el lector pide cambiar, anclado a un hecho del canon."""
+
+    hecho_id: str = Field(min_length=1)
+    descripcion: str = Field(min_length=1)
+
+
+@app.get("/novelas/{volumen_id}/lectura", operation_id="readNovela")
+def lectura_de_novela(volumen_id: str, conn: Conexion) -> dict[str, Any]:
+    """Todo lo que la lectura necesita: portada, indice y ficha, en una sola llamada.
+
+    Una sola llamada y no cuatro porque la lectura se abre entera: encadenar peticiones
+    produce una portada que aparece antes que su indice.
+    """
+    volumen = conn.execute(
+        "SELECT id, titulo FROM volumen WHERE id = ?", (volumen_id,)
+    ).fetchone()
+    if volumen is None:
+        raise HTTPException(status_code=404, detail=f"no existe el volumen {volumen_id}")
+
+    capitulos = conn.execute(
+        "SELECT id, orden FROM capitulo WHERE volumen_id = ? ORDER BY orden",
+        (volumen_id,),
+    ).fetchall()
+    # La ficha sale de lo que **esta** novela narra, no del canon entero. Sin acotar, el
+    # regalo de Ana mostraria los personajes de la novela de Marta: con una novela por
+    # proceso no se notaba, y en cuanto hay dos en la misma base es una fuga entre
+    # clientes.
+    personajes = conn.execute(
+        """
+        SELECT DISTINCT p.id, p.nombre_canonico
+        FROM personaje p
+        JOIN escena e ON e.pov_id = p.id
+        JOIN capitulo c ON c.id = e.capitulo_id
+        WHERE c.volumen_id = ?
+        UNION
+        SELECT DISTINCT p.id, p.nombre_canonico
+        FROM personaje p
+        JOIN evento_participante ep ON ep.entidad_id = p.id
+        JOIN escena_evento se ON se.evento_id = ep.evento_id
+        JOIN escena e ON e.id = se.escena_id
+        JOIN capitulo c ON c.id = e.capitulo_id
+        WHERE c.volumen_id = ?
+        ORDER BY 2
+        """,
+        (volumen_id, volumen_id),
+    ).fetchall()
+    lugares = conn.execute(
+        """
+        SELECT DISTINCT l.id, l.nombre_canonico
+        FROM lugar l
+        JOIN escena e ON e.lugar_id = l.id
+        JOIN capitulo c ON c.id = e.capitulo_id
+        WHERE c.volumen_id = ?
+        ORDER BY 2
+        """,
+        (volumen_id,),
+    ).fetchall()
+    # El destinatario es el del brief de **esta** novela. La columna `volumen.brief_id`
+    # existe justamente para poder preguntarlo en lugar de adivinarlo.
+    destinatario = conn.execute(
+        """
+        SELECT d.nombre, d.dedicatoria
+        FROM destinatario d
+        JOIN volumen v ON v.brief_id = d.brief_id
+        WHERE v.id = ?
+        LIMIT 1
+        """,
+        (volumen_id,),
+    ).fetchone()
+
+    return {
+        "volumen_id": volumen["id"],
+        "titulo": volumen["titulo"],
+        "dedicatoria": "" if destinatario is None else destinatario["dedicatoria"],
+        "destinatario": "" if destinatario is None else destinatario["nombre"],
+        "capitulos": [dict(f) for f in capitulos],
+        "personajes": [dict(f) for f in personajes],
+        "lugares": [dict(f) for f in lugares],
+    }
+
+
+@app.get("/novelas/{volumen_id}/versiones", operation_id="listVersiones")
+def versiones_de_novela(volumen_id: str, conn: Conexion) -> list[dict[str, Any]]:
+    """El historial. La version anterior se conserva siempre (RF-LEC-07)."""
+    filas = conn.execute(
+        "SELECT id, numero, anterior_id, publicada_en, motivo FROM version_novela "
+        "WHERE volumen_id = ? ORDER BY numero",
+        (volumen_id,),
+    ).fetchall()
+    return [dict(f) for f in filas]
+
+
+@app.get("/versiones/{version_id}/capitulos", operation_id="listCapitulosDeVersion")
+def capitulos_de_version(version_id: str, conn: Conexion) -> list[dict[str, Any]]:
+    """Que capitulos lleva una version y cuales cambiaron respecto a la anterior."""
+    filas = conn.execute(
+        "SELECT capitulo_id, borrador_id, cambiado FROM version_capitulo "
+        "WHERE version_id = ? ORDER BY capitulo_id",
+        (version_id,),
+    ).fetchall()
+    return [dict(f) for f in filas]
+
+
+@app.post(
+    "/novelas/{volumen_id}/cambios",
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="createCambioDelLector",
+)
+def pedir_cambio(volumen_id: str, peticion: PeticionDeCambio, conn: Conexion) -> dict[str, Any]:
+    """Acepta el cambio y devuelve **que capitulos** se van a regenerar.
+
+    Devolver la lista en la respuesta no es un detalle: es lo que permite al lector ver
+    que pedir un nombre de perro no reescribe la novela entera.
+    """
+    from backend.orchestrator.regeneracion import CambioDelLector, capitulos_afectados
+    from backend.store.repositories import UsoDeHechos
+
+    afectados = capitulos_afectados(
+        CambioDelLector(hecho_id=peticion.hecho_id, descripcion=peticion.descripcion),
+        usos=UsoDeHechos(conn),
+    )
+    return {
+        "volumen_id": volumen_id,
+        "hecho_id": peticion.hecho_id,
+        "capitulos_afectados": list(afectados),
+        "estado": "aceptado",
+    }
+
+
+# --- SPEC-004: escribir la novela y leer lo escrito ---------------------------------
+# Las tres rutas mantienen la regla 5 de `architecture.md` 2.3: la de escritura **encola**
+# y devuelve 202; quien invoca modelos es el worker. Las otras dos son lecturas.
+
+
+class PeticionDeEscritura(BaseModel):
+    """Con que se quiere escribir la novela. El modo se pide, no se adivina."""
+
+    modo: str = "modelo"
+
+
+class EscrituraAceptada(BaseModel):
+    """Lo que devuelve encargar la escritura. No hay prosa todavia, y se dice."""
+
+    volumen_id: str
+    plan_id: str
+    modo: str
+    tareas: list[str]
+    aviso: str
+
+
+class EscenaEnProgreso(BaseModel):
+    escena_id: str
+    capitulo_id: str
+    capitulo_orden: int
+    estado: str
+    intentos_narrativos: int
+    falta: list[str]
+
+
+class ProgresoDeEscritura(BaseModel):
+    volumen_id: str
+    estado: str
+    modo: str | None
+    plan_id: str | None
+    escritas: int
+    totales: int
+    detalle: str
+    escenas: list[EscenaEnProgreso]
+
+
+class EscenaConTexto(BaseModel):
+    """Una escena con su prosa y con la verdad sobre su estado."""
+
+    id: str
+    orden: int
+    texto: str
+    palabras: int
+    estado: str
+    aceptado: bool
+    motivo: str
+    modelo: str
+
+
+class CapituloConTexto(BaseModel):
+    id: str
+    orden: int
+    titulo: str
+    palabras: int
+    escenas: list[EscenaConTexto]
+
+
+class TextoDeNovela(BaseModel):
+    volumen_id: str
+    titulo: str
+    palabras: int
+    de_demostracion: bool
+    capitulos: list[CapituloConTexto]
+
+
+@app.post(
+    "/novelas/{volumen_id}/escritura",
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="createEscritura",
+)
+def encargar_escritura(
+    volumen_id: str, peticion: PeticionDeEscritura, conn: Conexion
+) -> EscrituraAceptada:
+    """Encola la escritura de la novela entera. No invoca ningun modelo (RF-RUT-01).
+
+    Si el modo es `modelo` y no hay credencial, responde `503` **antes** de encolar nada.
+    Encolar igualmente dejaria una novela a medio empezar que nadie puede terminar, y caer
+    en demostracion por cuenta propia seria la bajada silenciosa que D-08 prohibe.
+    """
+    from backend.orchestrator.apertura import NovelaDesconocida
+    from backend.orchestrator.escritura import NoHayConQueEscribir, encolar_escritura
+
+    try:
+        modo = ModoDeEscritura(peticion.modo)
+    except ValueError:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"modo desconocido {peticion.modo!r}; hay «modelo» y «demostracion»",
+        ) from None
+
+    try:
+        encolada = encolar_escritura(conn, volumen_id, modo)
+    except NoHayConQueEscribir as sin_credencial:
+        # Ni se encola ni se cae en demostracion por cuenta propia (D-08): se dice que
+        # falta y quien pidio la escritura decide.
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, str(sin_credencial)
+        ) from None
+    except NovelaDesconocida as desconocida:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(desconocida)) from None
+
+    return EscrituraAceptada(
+        volumen_id=encolada.volumen_id,
+        plan_id=encolada.plan_id,
+        modo=encolada.modo.value,
+        tareas=list(encolada.tareas),
+        aviso=_aviso_del_modo(encolada.modo),
+    )
+
+
+def _aviso_del_modo(modo: ModoDeEscritura) -> str:
+    if modo is ModoDeEscritura.DEMOSTRACION:
+        return (
+            "Modo demostracion: la prosa la compone el sistema a partir del encargo, sin "
+            "modelo. Queda marcada como tal en la procedencia de cada borrador y en la "
+            "lectura, y no debe confundirse con una novela escrita."
+        )
+    return (
+        "Encolada. El worker la ira escribiendo escena a escena; consulta el progreso en "
+        "esta misma ruta con GET."
+    )
+
+
+@app.get("/novelas/{volumen_id}/escritura", operation_id="readProgresoDeEscritura")
+def progreso_de_escritura(volumen_id: str, conn: Conexion) -> ProgresoDeEscritura:
+    """Por donde va la escritura. Una novela sin encargar responde `200`, no `404`."""
+    from backend.orchestrator.escritura import progreso
+
+    _exigir_volumen(conn, volumen_id)
+    estado = progreso(conn, volumen_id)
+    return ProgresoDeEscritura(
+        volumen_id=estado.volumen_id,
+        estado=estado.estado,
+        modo=None if estado.modo is None else estado.modo.value,
+        plan_id=estado.plan_id,
+        escritas=estado.escritas,
+        totales=estado.totales,
+        detalle=estado.detalle,
+        escenas=[
+            EscenaEnProgreso(
+                escena_id=escena.escena_id,
+                capitulo_id=escena.capitulo_id,
+                capitulo_orden=escena.capitulo_orden,
+                estado=escena.estado,
+                intentos_narrativos=escena.intentos_narrativos,
+                falta=list(escena.falta),
+            )
+            for escena in estado.escenas
+        ],
+    )
+
+
+@app.get("/novelas/{volumen_id}/texto", operation_id="readTextoDeNovela")
+def texto_de_novela(volumen_id: str, conn: Conexion) -> TextoDeNovela:
+    """La prosa escrita, capitulo a capitulo, con el estado de cada borrador.
+
+    Sirve el ultimo borrador **no obsoleto**, no el aceptado: en v1 la puerta
+    `escena_limpia` siempre trae evidencia ausente, asi que no hay aceptados y una lectura
+    que solo los sirviera estaria vacia para siempre sin que nada lo explicara (D-21).
+    """
+    from backend.store.escritura import TextoDeLaNovela
+
+    volumen = _exigir_volumen(conn, volumen_id)
+    capitulos = TextoDeLaNovela(conn).por_capitulos(volumen_id)
+    escenas = [escena for capitulo in capitulos for escena in capitulo.escenas]
+
+    return TextoDeNovela(
+        volumen_id=volumen_id,
+        titulo=volumen["titulo"],
+        palabras=sum(escena.palabras for escena in escenas),
+        # Basta con que una escena lo sea: media novela de demostracion es una novela de
+        # demostracion, y redondear hacia «esto es del modelo» seria mentir por omision.
+        de_demostracion=any(escena.modelo == "demostracion" for escena in escenas),
+        capitulos=[
+            CapituloConTexto(
+                id=capitulo.id,
+                orden=capitulo.orden,
+                titulo=capitulo.titulo,
+                palabras=capitulo.palabras,
+                escenas=[
+                    EscenaConTexto(
+                        id=escena.id,
+                        orden=escena.orden,
+                        texto=escena.texto,
+                        palabras=escena.palabras,
+                        estado=escena.estado,
+                        aceptado=escena.aceptado,
+                        motivo=escena.motivo,
+                        modelo=escena.modelo,
+                    )
+                    for escena in capitulo.escenas
+                ],
+            )
+            for capitulo in capitulos
+        ],
+    )
+
+
+def _exigir_volumen(conn: Conexion, volumen_id: str) -> Any:
+    fila = conn.execute(
+        "SELECT id, titulo FROM volumen WHERE id = ?", (volumen_id,)
+    ).fetchone()
+    if fila is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, f"no existe el volumen {volumen_id}"
+        )
+    return fila
+
+
+# --- SPEC-003, fase C: la entrevista es la puerta de entrada ------------------------
+# Es la unica ruta por la que entra texto que nadie del sistema ha escrito. El texto se
+# conserva entero -de el salen los recuerdos- y lo que parezca una orden se devuelve
+# como aviso en lugar de ejecutarse.
+
+
+class PeticionDeEntrevista(BaseModel):
+    """Las respuestas recogidas y, si lo hay, el texto que el cliente pego."""
+
+    respuestas: dict[str, Any]
+    texto_libre: str = ""
+
+
+@app.post("/entrevista", status_code=status.HTTP_201_CREATED, operation_id="createEntrevista")
+def cerrar_entrevista(peticion: PeticionDeEntrevista, conn: Conexion) -> dict[str, Any]:
+    """Cierra la entrevista y crea la novela, o dice que falta y que choca.
+
+    La ruta no habla con el rol: eso es de `orchestrator/`, porque `api/` no importa de
+    `agents/` (`CLAUDE.md` 4). Aqui solo se traduce el fallo del dominio en un `422` que
+    enumera los huecos y las contradicciones, en vez de un «datos invalidos» que obligaria
+    a repetir la entrevista entera.
+    """
+    from backend.orchestrator.encargo import (
+        EntrevistaSinCerrar,
+        crear_novela_desde_entrevista,
+    )
+
+    try:
+        creada = crear_novela_desde_entrevista(conn, peticion.respuestas, peticion.texto_libre)
+    except EntrevistaSinCerrar as sin_cerrar:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "huecos": list(sin_cerrar.huecos),
+                "contradicciones": [
+                    {"campos": list(campos), "detalle": detalle}
+                    for campos, detalle in sin_cerrar.contradicciones
+                ],
+            },
+        ) from None
+
+    return {
+        "brief_id": creada.brief_id,
+        "volumen_id": creada.volumen_id,
+        "titulo": creada.titulo,
+        "destinatario": creada.destinatario,
+        "palabras_vetadas": list(creada.palabras_vetadas),
+        "intentos_de_injection": list(creada.intentos_de_injection),
+        "hechos_propuestos": list(creada.hechos_propuestos),
+    }

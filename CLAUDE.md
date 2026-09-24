@@ -279,7 +279,10 @@ uv run mypy backend/
 uv run alembic upgrade head    # migraciones de SQLite
 
 uv run uvicorn backend.api.main:app --reload   # API en :8000
-uv run python -m backend.worker                # worker de generación
+uv run python -m backend.worker                # worker: consume la cola y escribe
+
+# Las tres mitades a la vez, con la base migrada y sembrada:
+.\run.ps1                      # API, worker y lectura; Ctrl+C para todo
 
 # Frontend
 cd frontend && npm install
@@ -290,7 +293,25 @@ cd frontend && npm run lint
 # Dominio
 uv run python -m backend.quality.validate --canon <ruta>   # verificación programática
 uv run python -m backend.context.budget --escena <id>      # recuento de tokens del paquete
+
+# Verificación formal (SPEC-003, fase F)
+cd lean && lake build                                      # invariantes de la cronología
+cd tla && tlc Generacion.tla -config Generacion.cfg        # invariantes del harness
+
+# Evaluación (SPEC-003, fase G)
+uv run pytest tests/test_evaluacion.py -v                  # los cinco briefs
 ```
+
+### 6.1 Los roles
+
+Cuatro, y ninguno llama a otro: la coordinación vive en `orchestrator/`.
+
+| Rol | Módulo | Qué hace |
+| --- | --- | --- |
+| Entrevistador | `agents/entrevistador/` | Recoge el encargo, detecta huecos y contradicciones, trata el texto libre como dato |
+| Planner | `agents/planner/` | Reparte la novela en capítulos y declara `hechos_requeridos` |
+| Redactor | `agents/redactor/` | Escribe prosa y declara los hechos nuevos |
+| Editor/critic | `agents/editor/` | Devuelve defectos con evidencia citable. Nunca juzga lo que él escribió |
 
 ## 7. Cómo trabajar aquí
 

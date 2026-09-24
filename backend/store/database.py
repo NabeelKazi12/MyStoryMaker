@@ -21,6 +21,12 @@ from pathlib import Path
 # cambiar de motor no obliga a tocar api/ ni orchestrator/.
 Conexion = sqlite3.Connection
 
+# Una fila leida del store. Se exporta por el mismo motivo que `Conexion`: los paquetes
+# que no pueden importar `sqlite3` -y son casi todos- necesitan poder **nombrar** lo que
+# el store les devuelve, y sin este alias acaban anotandolo como `object` y salpicando el
+# codigo de silencios al comprobador de tipos.
+Fila = sqlite3.Row
+
 VARIABLE_DE_ENTORNO = "MYSTORYMAKER_DB"
 RUTA_POR_DEFECTO = Path("mystorymaker.db")
 

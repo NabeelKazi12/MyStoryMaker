@@ -1,0 +1,317 @@
+/* La lectura se maqueta como un libro, no como un volcado de texto: serifa, párrafos
+   corridos, sangría francesa y medida limitada. Es lo que separa una novela de un <pre>. */
+
+:root {
+  --tinta: #1b1a17;
+  --papel: #faf7f0;
+  --apagado: #6b6255;
+  --marca: #8a6d3b;
+  --medida: 34rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--papel);
+  color: var(--tinta);
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1.7;
+}
+
+.disposicion {
+  display: grid;
+  grid-template-columns: 17rem 1fr;
+  min-height: 100vh;
+}
+
+nav.indice {
+  border-right: 1px solid #e6ded0;
+  padding: 2rem 1.5rem;
+  position: sticky;
+  top: 0;
+  align-self: start;
+  max-height: 100vh;
+  overflow-y: auto;
+}
+
+nav.indice h2 {
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--apagado);
+}
+
+nav.indice a {
+  display: block;
+  color: var(--tinta);
+  text-decoration: none;
+  padding: 0.35rem 0;
+}
+
+nav.indice a:hover {
+  text-decoration: underline;
+}
+
+/* Foco visible: la accesibilidad mínima avisa y no bloquea, pero esto no cuesta nada. */
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--marca);
+  outline-offset: 2px;
+}
+
+.cambiado::after {
+  content: " · cambiado";
+  color: var(--marca);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+}
+
+main {
+  padding: 3rem 2rem 6rem;
+}
+
+.medida {
+  max-width: var(--medida);
+  margin: 0 auto;
+}
+
+.portada {
+  text-align: center;
+  padding: 5rem 0 4rem;
+  border-bottom: 1px solid #e6ded0;
+}
+
+.portada h1 {
+  font-size: 2.4rem;
+  line-height: 1.2;
+  margin: 0 0 2rem;
+}
+
+.dedicatoria {
+  font-style: italic;
+  color: var(--apagado);
+}
+
+article h2 {
+  font-size: 1.4rem;
+  margin: 3rem 0 1.2rem;
+}
+
+article p {
+  margin: 0;
+  text-indent: 1.6em;
+}
+
+article p:first-of-type {
+  text-indent: 0;
+}
+
+.ficha {
+  border-top: 1px solid #e6ded0;
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+}
+
+.ficha dt {
+  font-weight: bold;
+}
+
+.ficha dd {
+  margin: 0 0 0.8rem;
+  color: var(--apagado);
+}
+
+.aviso {
+  border: 1px solid var(--marca);
+  background: #fff;
+  padding: 0.9rem 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.aviso button,
+.ficha button {
+  font: inherit;
+  background: none;
+  border: 1px solid #ddd3c2;
+  cursor: pointer;
+  padding: 0.2rem 0.6rem;
+}
+
+.vacio {
+  color: var(--apagado);
+  font-style: italic;
+}
+
+.error {
+  color: #8a3b3b;
+}
+
+/* --- La entrevista ---------------------------------------------------------------
+   Un formulario largo se abandona. Las etiquetas van encima, el campo ocupa la medida
+   entera y lo que falta se marca junto a su etiqueta, no en un resumen al final: ahí
+   obliga a volver a buscarlo. */
+
+.entrevista {
+  display: grid;
+  gap: 1.4rem;
+  padding-bottom: 4rem;
+}
+
+.entrevista label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.95rem;
+}
+
+.entrevista label em {
+  color: var(--marca);
+  font-size: 0.8rem;
+  font-style: normal;
+}
+
+.entrevista input,
+.entrevista textarea {
+  font: inherit;
+  font-family: Georgia, "Times New Roman", serif;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid #ddd3c2;
+  background: #fff;
+  color: var(--tinta);
+  width: 100%;
+}
+
+.entrevista textarea {
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.entrevista small {
+  color: var(--apagado);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.entrevista button[type="submit"] {
+  font: inherit;
+  padding: 0.7rem 1.4rem;
+  border: 1px solid var(--marca);
+  background: var(--marca);
+  color: var(--papel);
+  cursor: pointer;
+  justify-self: start;
+}
+
+.entrevista button[type="submit"]:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+nav.indice button {
+  font: inherit;
+  font-size: 0.85rem;
+  background: none;
+  border: 1px solid #ddd3c2;
+  cursor: pointer;
+  padding: 0.3rem 0.6rem;
+}
+
+/* --- La escritura y su previa ------------------------------------------------------
+   Dos cosas que esta parte tiene que dejar claras de un vistazo: por dónde va la
+   escritura, y que lo que se está leyendo es un borrador sin aceptar. La segunda es la
+   que no puede quedar bonita a costa de quedar discreta. */
+
+.escritura {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: stretch;
+}
+
+.escritura button {
+  width: 100%;
+}
+
+.escritura button.principal {
+  border-color: var(--marca);
+  background: var(--marca);
+  color: var(--papel);
+  padding: 0.55rem 0.6rem;
+}
+
+.escritura button:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.escritura .detalle {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--apagado);
+  margin: 0.2rem 0 0;
+}
+
+.escritura progress {
+  width: 100%;
+  height: 0.4rem;
+}
+
+.marca-demostracion {
+  border-left: 3px solid var(--marca);
+  background: #fffdf7;
+  padding: 0.9rem 1rem;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  margin: 0 0 1.5rem;
+}
+
+/* Las escenas de un capítulo se separan con un espacio en blanco y tres puntos, que es
+   como las separa un libro. Una línea horizontal las convertiría en secciones de
+   documento. */
+.escena + .escena {
+  margin-top: 0;
+}
+
+.separador {
+  text-align: center;
+  letter-spacing: 0.4em;
+  color: var(--apagado);
+  margin: 2rem 0;
+  text-indent: 0;
+}
+
+.escena p:first-of-type {
+  text-indent: 0;
+}
+
+/* La primera letra de cada escena, en capitular. Es lo que hace que la previa se lea
+   como una novela y no como la salida de un proceso. */
+.escena > p:first-of-type::first-letter {
+  float: left;
+  font-size: 3.1rem;
+  line-height: 0.82;
+  padding: 0.1rem 0.5rem 0 0;
+  color: var(--marca);
+}
+
+.estado-borrador {
+  clear: both;
+  margin: 1.6rem 0 0;
+  padding: 0.7rem 0.9rem;
+  border: 1px dashed #ddd3c2;
+  background: #fffdf7;
+  color: var(--apagado);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  text-indent: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.estado-borrador.aceptado {
+  border-style: solid;
+  border-color: #cfe0cf;
+}

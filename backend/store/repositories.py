@@ -629,8 +629,11 @@ class AuditLog:
 
     def entradas(self) -> tuple[EntradaDeAudit, ...]:
         filas = self.conn.execute(
+            # Por `rowid`, que es el orden en que ocurrieron. Ordenar por `id` -un uuid-
+            # devolvia las decisiones barajadas, y un audit log que no conserva el orden
+            # de los hechos no sirve para reconstruir que paso.
             "SELECT id, ocurrido_en, decision, motivo, ambito, tarea_id, capitulo_id, "
-            "termino FROM audit_log ORDER BY id"
+            "termino FROM audit_log ORDER BY rowid"
         ).fetchall()
         return tuple(
             EntradaDeAudit(
@@ -645,3 +648,95 @@ class AuditLog:
             )
             for fila in filas
         )
+
+
+@dataclass(frozen=True)
+class VersionesDeNovela:
+    """El historial de versiones publicadas, encadenado y nunca sobrescrito.
+
+    `anterior_id` no es decorativo: es lo que hace imposible perder una version sin un
+    `UPDATE` que ningun camino del codigo escribe. Es el invariante que TLA+ verifica
+    como `VersionAnteriorSeConserva`.
+
+    Cubre RF-LEC-06 y RF-LEC-07.
+    """
+
+    conn: sqlite3.Connection
+
+    def publicar(
+        self,
+        identificador: str,
+        *,
+        volumen_id: str,
+        capitulos: tuple[str, ...],
+        cambiados: tuple[str, ...] = (),
+        motivo: str = "",
+    ) -> str:
+        siguiente = self._siguiente_numero(volumen_id)
+        anterior = self._ultima(volumen_id)
+        self.conn.execute(
+            "INSERT INTO version_novela "
+            "(id, volumen_id, numero, anterior_id, publicada_en, motivo) "
+            "VALUES (?, ?, ?, ?, datetime('now'), ?)",
+            (identificador, volumen_id, siguiente, anterior, motivo),
+        )
+        for capitulo_id in capitulos:
+            self.conn.execute(
+                "INSERT INTO version_capitulo (version_id, capitulo_id, cambiado) "
+                "VALUES (?, ?, ?)",
+                (identificador, capitulo_id, 1 if capitulo_id in cambiados else 0),
+            )
+        return identificador
+
+    def numero_de(self, version_id: str) -> int | None:
+        fila = self.conn.execute(
+            "SELECT numero FROM version_novela WHERE id = ?", (version_id,)
+        ).fetchone()
+        return None if fila is None else int(fila["numero"])
+
+    def anterior_de(self, version_id: str) -> str | None:
+        fila = self.conn.execute(
+            "SELECT anterior_id FROM version_novela WHERE id = ?", (version_id,)
+        ).fetchone()
+        return None if fila is None else fila["anterior_id"]
+
+    def capitulos_de(self, version_id: str) -> tuple[str, ...]:
+        filas = self.conn.execute(
+            "SELECT capitulo_id FROM version_capitulo WHERE version_id = ? "
+            "ORDER BY capitulo_id",
+            (version_id,),
+        ).fetchall()
+        return tuple(fila["capitulo_id"] for fila in filas)
+
+    def capitulos_cambiados(self, version_id: str) -> tuple[str, ...]:
+        """Lo que la lectura marca como cambiado respecto a la version anterior."""
+        filas = self.conn.execute(
+            "SELECT capitulo_id FROM version_capitulo "
+            "WHERE version_id = ? AND cambiado = 1 ORDER BY capitulo_id",
+            (version_id,),
+        ).fetchall()
+        return tuple(fila["capitulo_id"] for fila in filas)
+
+    def historial(self, volumen_id: str) -> tuple[str, ...]:
+        filas = self.conn.execute(
+            "SELECT id FROM version_novela WHERE volumen_id = ? ORDER BY numero",
+            (volumen_id,),
+        ).fetchall()
+        return tuple(fila["id"] for fila in filas)
+
+    # --- piezas ----------------------------------------------------------------------
+
+    def _siguiente_numero(self, volumen_id: str) -> int:
+        fila = self.conn.execute(
+            "SELECT COALESCE(MAX(numero), 0) + 1 AS siguiente FROM version_novela "
+            "WHERE volumen_id = ?",
+            (volumen_id,),
+        ).fetchone()
+        return int(fila["siguiente"])
+
+    def _ultima(self, volumen_id: str) -> str | None:
+        fila = self.conn.execute(
+            "SELECT id FROM version_novela WHERE volumen_id = ? ORDER BY numero DESC LIMIT 1",
+            (volumen_id,),
+        ).fetchone()
+        return None if fila is None else fila["id"]

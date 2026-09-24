@@ -55,8 +55,8 @@ def test_la_migracion_sella_su_version(base_migrada: Path) -> None:
     """
     with _conexion(base_migrada) as conn:
         sellada = conn.execute("SELECT version_num FROM alembic_version").fetchall()
-    # La cabeza avanza con cada migracion encadenada; hoy es 0002 (SPEC-003, A-03).
-    assert [fila[0] for fila in sellada] == ["0002"]
+    # La cabeza avanza con cada migracion encadenada; hoy es 0004 (SPEC-004, fase A).
+    assert [fila[0] for fila in sellada] == ["0004"]
 
 
 @pytest.mark.invariants
@@ -328,3 +328,18 @@ def test_una_version_de_novela_conserva_la_anterior(base_migrada: Path) -> None:
 
     assert {"numero", "anterior_id", "publicada_en"} <= columnas
     assert {"version_id", "capitulo_id", "cambiado"} <= cambiados
+
+
+@pytest.mark.invariants
+def test_un_volumen_sabe_de_que_brief_es(base_migrada: Path) -> None:
+    """Sin esta columna, «quién es el destinatario de esta novela» no tiene respuesta.
+
+    La consulta acababa adivinándolo por parecido del título, que es la clase de atajo
+    que funciona en la demo y falla con dos novelas parecidas.
+    """
+    with sqlite3.connect(base_migrada) as conn:
+        columnas = {fila[1] for fila in conn.execute("PRAGMA table_info(volumen)")}
+        claves = {fila[2] for fila in conn.execute("PRAGMA foreign_key_list(volumen)")}
+
+    assert "brief_id" in columnas
+    assert "brief" in claves

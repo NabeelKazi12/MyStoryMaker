@@ -17,6 +17,7 @@ se sepa cuál toca sin tener que abrir las tres.
 | [`metodologias-de-verificacion`](metodologias-de-verificacion/SKILL.md) | Hay que justificar cómo se demuestra que algo funciona | `docs/verification.md`, invariantes, `Puerta` |
 | [`sqlite-vec`](sqlite-vec/SKILL.md) | Hay que guardar embeddings y consultarlos por similitud | `backend/store/`, índice vectorial de `UnidadDeContexto` |
 | [`feature-sliced-design`](feature-sliced-design/SKILL.md) | Hay que decidir dónde va un fichero del frontend | `frontend/` (Vite + React) |
+| [`capitulo-verificable`](capitulo-verificable/SKILL.md) | Hay que escribir o revisar un capítulo de la novela | `backend/agents/`, hooks, `backend/quality/` |
 
 ---
 

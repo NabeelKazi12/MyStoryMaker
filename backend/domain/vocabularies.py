@@ -226,3 +226,20 @@ class ClaseDeFallo(VocabularioCerrado):
     CONTRATO = "contrato"
     CONTENIDO = "contenido"
     PRESUPUESTO = "presupuesto"
+
+
+class ModoDeEscritura(VocabularioCerrado):
+    """Con que se escribe una novela. Registrado como D-20 (SPEC-004).
+
+    Dos valores y ninguno por defecto implicito: quien encarga la escritura dice cual
+    quiere, y el modo viaja desde la ruta hasta la `Procedencia`. Vive en el dominio -y no
+    junto al cliente- porque lo consultan la API, el orquestador y el worker, y porque un
+    modo que solo conociera el worker no podria contarse en la lectura.
+
+    `DEMOSTRACION` no es un modo degradado que el sistema elija cuando no puede el otro:
+    es un modo distinto, que hay que pedir, y cuyo resultado queda marcado como tal. Caer
+    en el en silencio es la bajada de modelo que D-08 prohibe.
+    """
+
+    MODELO = "modelo"
+    DEMOSTRACION = "demostracion"

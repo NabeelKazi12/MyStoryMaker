@@ -9,6 +9,7 @@ Cubre RF-WRK-01 a RF-WRK-05, RF-WRK-08 y RF-WRK-09.
 
 from __future__ import annotations
 
+import dataclasses
 import time
 import uuid
 from dataclasses import dataclass
@@ -24,10 +25,30 @@ from backend.domain.production.ejecucion import Procedencia
 from backend.domain.vocabularies import ClaseDeFallo
 from backend.worker.modelo import (
     MAX_TOKENS_REDACCION,
-    MODELO_DEL_REDACTOR,
     ClienteDeModelo,
     clasificar_excepcion,
 )
+
+
+@dataclass(frozen=True)
+class InformeCrudo:
+    """Una invocacion pagada, con su texto sin interpretar.
+
+    Existe para que los dos roles que invocan modelos -Redactor y Planner- compartan el
+    pago, el recuento y la procedencia sin compartir el contrato de salida. Cada uno
+    valida el suyo, que es lo que impide que un objeto acabe decidiendo que esquema
+    aplicar segun una cadena.
+    """
+
+    tarea_id: str
+    procedencia: Procedencia
+    texto: str = ""
+    clase_de_fallo: ClaseDeFallo | None = None
+    detalle_del_fallo: str = ""
+
+    @property
+    def tuvo_exito(self) -> bool:
+        return self.clase_de_fallo is None
 
 
 @dataclass(frozen=True)
@@ -51,12 +72,27 @@ class Informe:
 
 @dataclass
 class Worker:
-    """Invoca al Redactor con los parametros de R-1 y devuelve un informe."""
+    """Invoca a un rol con los parametros de R-1 y devuelve un informe.
+
+    `agente` es de quien se registra la `Procedencia`. No es cosmetico: sin el, la apertura
+    del canon quedaria anotada como si la hubiera escrito el Redactor, y la pregunta
+    «quien propuso este lugar» dejaria de tener respuesta.
+
+    El parseo de la salida **no** ocurre aqui cuando el rol no es el Redactor: este worker
+    conoce un unico contrato, y quien invoca a otro rol parsea con el suyo. Mezclar los dos
+    aqui pondria a un solo objeto a decidir que contrato aplica segun una cadena.
+    """
 
     cliente: ClienteDeModelo
+    agente: str = "redactor"
 
-    def ejecutar(self, tarea_id: str, paquete_id: str, prompt: str) -> Informe:
-        """Una invocacion. Sin estado propio: todo lo que sabe se lo dan y lo devuelve."""
+    def invocar(self, tarea_id: str, paquete_id: str, prompt: str) -> InformeCrudo:
+        """Una invocacion, sin interpretar la respuesta.
+
+        Es lo que comparten todos los roles: contar el paquete, pagar la llamada y anotar
+        la procedencia. Lo que cada rol hace con el texto es cosa suya, y por eso no pasa
+        por aqui.
+        """
         comienzo = time.monotonic()
 
         tokens_de_entrada = contar_tokens(prompt)
@@ -67,7 +103,7 @@ class Worker:
                 f"el prompt ocupa {tokens_de_entrada} tokens sobre el maximo de entrada "
                 f"de {MAXIMO_DE_ENTRADA} (RF-CTX-08); no se envia"
             )
-            return Informe(
+            return InformeCrudo(
                 tarea_id=tarea_id,
                 procedencia=self._procedencia(
                     paquete_id,
@@ -82,7 +118,7 @@ class Worker:
         try:
             respuesta = self.cliente.invocar(prompt, max_tokens=MAX_TOKENS_REDACCION)
         except Exception as error:  # noqa: BLE001 - se clasifica, no se traga
-            return Informe(
+            return InformeCrudo(
                 tarea_id=tarea_id,
                 procedencia=self._procedencia(
                     paquete_id,
@@ -94,46 +130,63 @@ class Worker:
                 detalle_del_fallo=str(error),
             )
 
-        latencia = int((time.monotonic() - comienzo) * 1000)
+        return InformeCrudo(
+            tarea_id=tarea_id,
+            procedencia=self._procedencia(
+                paquete_id,
+                respuesta.coste,
+                int((time.monotonic() - comienzo) * 1000),
+                None,
+            ),
+            texto=respuesta.texto,
+        )
+
+    def ejecutar(self, tarea_id: str, paquete_id: str, prompt: str) -> Informe:
+        """Una invocacion del Redactor, con su salida ya validada contra el esquema."""
+        crudo = self.invocar(tarea_id, paquete_id, prompt)
+        if crudo.clase_de_fallo is not None:
+            return Informe(
+                tarea_id=crudo.tarea_id,
+                procedencia=crudo.procedencia,
+                clase_de_fallo=crudo.clase_de_fallo,
+                detalle_del_fallo=crudo.detalle_del_fallo,
+            )
+
         try:
-            salida = parsear(respuesta.texto)
+            salida = parsear(crudo.texto)
         except SalidaInvalida as error:
             return Informe(
-                tarea_id=tarea_id,
-                procedencia=self._procedencia(
-                    paquete_id, respuesta.coste, latencia, ClaseDeFallo.CONTRATO
+                tarea_id=crudo.tarea_id,
+                procedencia=dataclasses.replace(
+                    crudo.procedencia, clase_de_fallo=ClaseDeFallo.CONTRATO
                 ),
                 clase_de_fallo=ClaseDeFallo.CONTRATO,
                 detalle_del_fallo=str(error),
             )
 
-        if salida.contexto_insuficiente:
-            # El agente se rindio en lugar de inventar. Es un resultado legitimo.
-            return Informe(
-                tarea_id=tarea_id,
-                procedencia=self._procedencia(paquete_id, respuesta.coste, latencia, None),
-                salida=salida,
-            )
-
+        # Si el agente se rindio, `salida.contexto_insuficiente` lo dice y trae su `falta`.
+        # Es un resultado legitimo, no un fallo: el Orquestador reconstruye el paquete o
+        # replanifica (RF-WRK-05).
         return Informe(
-            tarea_id=tarea_id,
-            procedencia=self._procedencia(paquete_id, respuesta.coste, latencia, None),
-            salida=salida,
+            tarea_id=crudo.tarea_id, procedencia=crudo.procedencia, salida=salida
         )
 
-    @staticmethod
     def _procedencia(
-        paquete_id: str, coste: float, latencia_ms: int, clase: ClaseDeFallo | None
+        self, paquete_id: str, coste: float, latencia_ms: int, clase: ClaseDeFallo | None
     ) -> Procedencia:
         """Toda invocacion registra procedencia, incluidas las que fallan (RF-WRK-03).
 
         No lleva prosa: los registros referencian el id del `Borrador`. Duplicar el texto
         crearia una segunda copia que nadie invalida cuando la escena se reescribe.
+
+        El modelo sale del cliente y no de una constante: es lo que hace que una
+        invocacion de demostracion quede reconocible para siempre en la misma columna en
+        la que se mira siempre cual respondio (RF-MOD-03).
         """
         return Procedencia(
             id=f"pr-{uuid.uuid4().hex[:12]}",
-            agente="redactor",
-            modelo=MODELO_DEL_REDACTOR,
+            agente=self.agente,
+            modelo=self.cliente.modelo,
             version_de_prompt=VERSION_DE_PROMPT,
             paquete_id=paquete_id,
             parametros_muestreo="thinking=adaptive;effort=high",
