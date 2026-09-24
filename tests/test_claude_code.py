@@ -76,6 +76,11 @@ def test_invoca_haiku_sin_herramientas_y_con_el_prompt_por_stdin(
     # Sin herramientas: un Claude Code que puede leer y escribir ficheros no es un redactor.
     assert argumentos[argumentos.index("--tools") + 1] == ""
     assert "--no-session-persistence" in argumentos
+    # Sin pensamiento extendido (`PENSAMIENTO = None`): con el, una escena tardaba 124 s.
+    assert json.loads(argumentos[argumentos.index("--settings") + 1]) == {
+        "alwaysThinkingEnabled": False
+    }
+    assert llamada["env"]["MAX_THINKING_TOKENS"] == "0"
     # El prompt no va en la linea de comandos, que en Windows se queda corta.
     assert "el paquete entero" not in argumentos
     assert llamada["input"] == "el paquete entero"

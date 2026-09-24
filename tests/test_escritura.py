@@ -812,3 +812,79 @@ def test_la_extension_del_encargo_se_reparte_entre_las_escenas(
     }
     escenas = len(ENTREVISTA["recuerdos"])  # type: ignore[arg-type]
     assert presupuestos == {max(80, 300 // escenas)}
+
+
+# --- SPEC-010: la apertura pide varios candidatos a la vez ------------------------------
+
+
+class _ClienteConcurrente:
+    """Admite concurrencia y lo demuestra: nadie contesta hasta que los tres han llegado.
+
+    Si el bucle invocara en serie, la barrera venceria y el test fallaria; es lo que
+    comprueba que los candidatos van **a la vez** y no uno detras de otro.
+    """
+
+    admite_concurrencia = True
+
+    def __init__(self, textos: list[str], simultaneos: int = 3) -> None:
+        import threading
+
+        self._textos = list(textos)
+        self._cerrojo = threading.Lock()
+        self._barrera = threading.Barrier(simultaneos, timeout=5)
+        self.invocaciones = 0
+
+    @property
+    def modelo(self) -> str:
+        return MODELO_DEL_REDACTOR
+
+    def invocar(self, prompt: str, *, max_tokens: int) -> Respuesta:
+        self._barrera.wait()
+        with self._cerrojo:
+            self.invocaciones += 1
+            texto = self._textos.pop(0) if self._textos else "sin plan"
+        return Respuesta(texto=texto, tokens_entrada=1, tokens_salida=1, modelo=self.modelo)
+
+
+@pytest.mark.invariants
+def test_la_apertura_resuelve_con_el_candidato_que_valida_en_una_vuelta(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RF-TIE-02 y RF-TIE-03: dos candidatos malos y uno bueno, una sola vuelta."""
+    monkeypatch.setenv(VARIABLE_DEL_EJECUTABLE, sys.executable)
+    volumen_id = _novela(conn)
+    buena = _apertura_de_demostracion(conn, volumen_id)
+    encolar_escritura(conn, volumen_id, ModoDeEscritura.MODELO)
+    semaforo = Semaforo()
+    cliente = _ClienteConcurrente(["sin plan", "sin plan", buena])
+
+    Bucle(conn=conn, modo=ModoDeEscritura.MODELO, cliente=cliente, semaforo=semaforo).una_vuelta()
+
+    assert cliente.invocaciones == 3
+    assert esta_abierta(conn, volumen_id)
+    procedencias = conn.execute(
+        "SELECT COUNT(*) AS n FROM procedencia WHERE agente = 'planner'"
+    ).fetchone()["n"]
+    assert procedencias == 3
+    assert semaforo.en_vuelo == 0
+
+
+@pytest.mark.invariants
+def test_si_ningun_candidato_valida_se_para_y_el_credito_vuelve_a_cero(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RF-TIE-04. Tampoco se pierde credito cuando todo falla."""
+    monkeypatch.setenv(VARIABLE_DEL_EJECUTABLE, sys.executable)
+    volumen_id = _novela(conn)
+    encolar_escritura(conn, volumen_id, ModoDeEscritura.MODELO)
+    semaforo = Semaforo()
+    cliente = _ClienteConcurrente([])
+
+    vuelta = Bucle(
+        conn=conn, modo=ModoDeEscritura.MODELO, cliente=cliente, semaforo=semaforo
+    ).una_vuelta()
+
+    assert vuelta is not None and vuelta.estado == EstadoDeTarea.ESCALADA.value
+    assert not esta_abierta(conn, volumen_id)
+    assert cliente.invocaciones == 3 * 4
+    assert semaforo.en_vuelo == 0

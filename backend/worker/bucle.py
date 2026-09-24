@@ -26,6 +26,7 @@ Cubre RF-ESC-01 a RF-ESC-09.
 from __future__ import annotations
 
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from backend.agents.planner.planner import (
@@ -104,6 +105,12 @@ RESERVA_DE_REDACCION = PRESUPUESTO_DE_REDACCION + MAX_TOKENS_REDACCION
 # `estados.MAXIMO_DE_INTENTOS`, y esta aqui como red: quien decide de verdad cuando parar
 # es `siguiente_accion`, leyendo el historial tipificado.
 VUELTAS_DE_LA_ESCALERA = 4
+
+# Cuantas aperturas se piden a la vez a un cliente que lo admite (SPEC-010 RF-TIE-02). Sin
+# pensamiento extendido, el Planner valida en torno a 2 de cada 3 aperturas: con tres a la
+# vez, que fallen todas es raro y la apertura tarda lo que tarda una sola. Las tres
+# reservas caben en el techo de D-13: 3 x RESERVA_DE_REDACCION = 84.000 <= 100.000.
+CANDIDATOS_DE_APERTURA = 3
 
 
 @dataclass(frozen=True)
@@ -233,30 +240,38 @@ class Bucle:
                     "respetando exactamente el formato de cada columna.",
                 )
 
-            invocacion = self._invocar(tarea, ensamblador, agente="planner")
-            if invocacion is None:
+            invocaciones = self._invocar_candidatos(
+                tarea, ensamblador, agente="planner", cuantos=self._candidatos_de_apertura()
+            )
+            if not invocaciones:
                 if self._toca_escalar(tarea["id"]):
                     return self._parar(tarea, "no se pudo invocar al Planner")
                 continue
 
-            try:
-                apertura = parsear_apertura(
-                    invocacion.crudo.texto, recuerdos_obligatorios=encargo.ids_de_recuerdos
-                )
-                resultado = persistir_apertura(self.conn, encargo, apertura)
-            except AperturaImposible as error:
+            # El primero que valida, en orden de candidato. Los que no, cuentan como intento
+            # y el motivo del primero es el que viaja a la vuelta siguiente.
+            resultado = None
+            rendicion: AperturaImposible | None = None
+            motivos: list[str] = []
+            for invocacion in invocaciones:
+                try:
+                    apertura = parsear_apertura(
+                        invocacion.crudo.texto, recuerdos_obligatorios=encargo.ids_de_recuerdos
+                    )
+                    resultado = persistir_apertura(self.conn, encargo, apertura)
+                    break
+                except AperturaImposible as error:
+                    self._anotar_apertura_rechazada(tarea)
+                    rendicion = rendicion or error
+                except SalidaInvalidaDelPlanner as error:
+                    self._anotar_apertura_rechazada(tarea)
+                    motivos.append(str(error))
+            if resultado is not None:
+                break
+            if rendicion is not None:
                 # Rendirse no es un error de formato: reintentar no le da lo que le falta.
-                ColaDeTareas(self.conn).anotar_intento(
-                    tarea["id"], clase=ClaseDeFallo.CONTRATO.value, tipo_de_defecto="apertura"
-                )
-                return self._parar(tarea, str(error))
-            except SalidaInvalidaDelPlanner as error:
-                ColaDeTareas(self.conn).anotar_intento(
-                    tarea["id"], clase=ClaseDeFallo.CONTRATO.value, tipo_de_defecto="apertura"
-                )
-                rechazo = str(error)
-                continue
-            break
+                return self._parar(tarea, str(rendicion))
+            rechazo = motivos[0]
         else:
             return self._parar(tarea, rechazo or "no se pudo invocar al Planner")
 
@@ -767,6 +782,80 @@ class Bucle:
             cola.anotar_falta(tarea["id"], (crudo.detalle_del_fallo,))
             return None
         return Invocacion(crudo=crudo, paquete=paquete)
+
+    def _anotar_apertura_rechazada(self, tarea: Fila) -> None:
+        ColaDeTareas(self.conn).anotar_intento(
+            tarea["id"], clase=ClaseDeFallo.CONTRATO.value, tipo_de_defecto="apertura"
+        )
+
+    def _candidatos_de_apertura(self) -> int:
+        """Tres si el cliente admite invocaciones simultaneas; uno si no (RF-TIE-05).
+
+        Los clientes deterministas -demostracion y pruebas- devolverian tres veces lo mismo,
+        y con varios hilos sus guiones dependerian del orden en que llegan.
+        """
+        if getattr(self.cliente, "admite_concurrencia", False):
+            return CANDIDATOS_DE_APERTURA
+        return 1
+
+    def _invocar_candidatos(
+        self, tarea: Fila, ensamblador: Ensamblador, *, agente: str, cuantos: int
+    ) -> list[Invocacion]:
+        """El mismo paquete a `cuantos` invocaciones simultaneas. Devuelve las que salieron.
+
+        Los hilos **solo** invocan al modelo: ensamblar, registrar la procedencia y escribir
+        en la base se queda en este hilo, porque la conexion SQLite no se comparte entre
+        hilos a la vez. Cada candidato reserva su credito y lo libera al terminar, salga
+        bien o mal (RF-TIE-04), y deja su procedencia aunque se descarte (RF-TIE-03).
+        """
+        if cuantos <= 1:
+            invocacion = self._invocar(tarea, ensamblador, agente=agente)
+            return [] if invocacion is None else [invocacion]
+
+        paquete_id = f"pq-{uuid.uuid4().hex[:12]}"
+        try:
+            paquete, prompt = ensamblador.ensamblar(tarea["id"], paquete_id)
+        except PresupuestoExcedido as excedido:
+            ColaDeTareas(self.conn).anotar_falta(
+                tarea["id"], bloqueada_por_presupuesto(excedido)
+            )
+            return []
+
+        registro = RegistroDeInvocacion(self.conn)
+        registro.guardar_paquete(paquete)
+        # Tantos candidatos como quepan en el credito libre, y al menos uno: encolar un
+        # candidato detras de los otros dos seria volver a invocar en serie.
+        libre = self.semaforo.credito_total - self.semaforo.en_vuelo
+        cuantos = max(1, min(cuantos, libre // RESERVA_DE_REDACCION))
+        reservas = [f"{tarea['id']}#candidato-{numero}" for numero in range(1, cuantos + 1)]
+        for reserva in reservas:
+            self.semaforo.admitir(reserva, RESERVA_DE_REDACCION, tarea["prioridad"])
+        self.conn.commit()
+
+        worker = Worker(cliente=self.cliente, agente=agente)
+        try:
+            with ThreadPoolExecutor(max_workers=cuantos) as hilos:
+                crudos = list(
+                    hilos.map(
+                        lambda _: worker.invocar(tarea["id"], paquete_id, prompt), reservas
+                    )
+                )
+        finally:
+            for reserva in reservas:
+                self.semaforo.liberar(reserva)
+
+        cola = ColaDeTareas(self.conn)
+        salieron: list[Invocacion] = []
+        for crudo in crudos:
+            registro.guardar_procedencia(crudo.procedencia)
+            if crudo.clase_de_fallo is not None:
+                cola.anotar_intento(
+                    tarea["id"], clase=crudo.clase_de_fallo.value, tipo_de_defecto=None
+                )
+                cola.anotar_falta(tarea["id"], (crudo.detalle_del_fallo,))
+                continue
+            salieron.append(Invocacion(crudo=crudo, paquete=paquete))
+        return salieron
 
     def _artefacto_previo(
         self, tarea: Fila, ensamblador: Ensamblador, intento: int

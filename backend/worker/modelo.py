@@ -28,7 +28,7 @@ import subprocess
 import tempfile
 import time
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol
 
 from backend.context.presupuesto import TECHO_DE_SALIDA_REDACCION
 from backend.domain.vocabularies import ClaseDeFallo, ModoDeEscritura
@@ -74,6 +74,13 @@ MAX_TOKENS_REDACCION = TECHO_DE_SALIDA_REDACCION
 PENSAMIENTO = None
 # Sin `effort`: el modelo lo rechaza.
 ESFUERZO = None
+
+# Claude Code enciende el pensamiento extendido por su cuenta, contra la decision de
+# arriba. Medido en una escena real: 15.933 tokens pensando para 620 palabras de prosa,
+# 124 s y 0,092 $; sin pensar, 13 s y 0,011 $. Se apaga por las dos vias que Claude Code
+# admite -ajuste y variable de entorno- para que no dependa de su version.
+AJUSTES_SIN_PENSAMIENTO = json.dumps({"alwaysThinkingEnabled": False})
+ENTORNO_SIN_PENSAMIENTO = {"MAX_THINKING_TOKENS": "0"}
 
 
 class FalloDeInvocacion(Exception):
@@ -191,6 +198,10 @@ class ClienteClaudeCode:
     modelo_solicitado: str = MODELO_DE_CLAUDE_CODE
     timeout_s: int = TIMEOUT_DE_INVOCACION_S
 
+    # Cada invocacion es un proceso aparte: se pueden lanzar varias a la vez sin compartir
+    # nada (SPEC-010 RF-TIE-02).
+    admite_concurrencia: ClassVar[bool] = True
+
     @property
     def modelo(self) -> str:
         return MODELO_DEL_REDACTOR
@@ -209,6 +220,8 @@ class ClienteClaudeCode:
             "--setting-sources",
             "",
             "--no-session-persistence",
+            "--settings",
+            AJUSTES_SIN_PENSAMIENTO,
             "--system-prompt",
             PROMPT_DE_SISTEMA,
         ]
@@ -222,6 +235,7 @@ class ClienteClaudeCode:
             for clave, valor in os.environ.items()
             if clave not in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT")
         }
+        entorno.update(ENTORNO_SIN_PENSAMIENTO)
         try:
             proceso = subprocess.run(
                 self.argumentos(),

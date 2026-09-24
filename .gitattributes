@@ -1,0 +1,4 @@
+# Los prompts versionados se comprueban por hash (RF-WRK-07, RF-APE-05). Con
+# core.autocrlf, Windows los descargaria con CRLF y el hash dejaria de coincidir en
+# cualquier checkout nuevo: se fijan en LF, que es como se calculo el manifiesto.
+backend/agents/**/prompts/*.md text eol=lf
