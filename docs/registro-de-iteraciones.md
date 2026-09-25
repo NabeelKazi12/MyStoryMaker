@@ -1,6 +1,6 @@
 # Registro de iteraciones: qué cambió, por qué y qué lo provocó
 
-2026-09-23 · SPEC-003 RF-EVA-05
+2026-09-23, ampliado el 2026-09-25 · SPEC-003 RF-EVA-05
 
 ## Qué contiene este documento
 
@@ -41,3 +41,17 @@ cambió el sistema, no es una iteración.
 La distinción entre I-10/I-11 y I-12 importa: lo segundo demuestra que **el fallo existe y
 se puede detectar**; lo primero es la ejecución de la herramienta formal, que queda
 pendiente de una máquina con el toolchain.
+
+## 4. Iteraciones provocadas por la evaluación de extremo a extremo
+
+2026-09-25. Los cinco briefs pasaron por la tubería real con Claude Code (`evaluacion.md` §3).
+Lo que destaparon cambia sistema o lo propone; el detalle de cada hallazgo está en
+`evaluacion.md` §6.
+
+| # | Qué lo provocó | Qué cambió | Por qué así |
+| --- | --- | --- | --- |
+| I-13 | Las escenas miden el 47 % de su presupuesto (mediana de 28) | Prompt candidato del Redactor `v1.2.0`, medido sin tocar el repositorio: la mediana sube a 0,585 (34 escenas) y ninguna llega al 90 % | Adoptarlo es comportamiento nuevo y va a SPEC-014. Medirlo antes permite que la spec se apruebe con el antes y el después en la mano, no con una expectativa |
+| I-14 | La `Procedencia` del Planner consta como `1.1.0` cuando corre la `1.3.0` | Se propone en SPEC-014 que cada rol registre su propia versión | El tuning de I-13 no se habría podido atribuir si hubiera tocado al Planner: su versión no queda escrita en ningún sitio |
+| I-15 | `evaluacion.md` afirmaba que el fallo formal «impide publicar la versión» | Se corrige el documento: el validador no está conectado y el canon real no tiene fechas | Una afirmación que el código no cumple es peor que un hueco declarado: nadie la revisa porque parece hecha |
+| I-16 | El brief `injection` pasaba de extremo a extremo sin defenderse: el texto libre no llega al modelo | El arnés añade la orden a un recuerdo, que sí llega | Un adversarial que no alcanza al modelo prueba la tubería de datos, no la defensa |
+
