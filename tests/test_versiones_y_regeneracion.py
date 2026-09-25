@@ -80,6 +80,49 @@ def test_un_hecho_que_no_usa_nadie_no_regenera_nada_y_se_dice(
 
 
 @pytest.mark.invariants
+def test_un_cambio_sobre_un_personaje_toca_los_capitulos_de_sus_hechos(
+    conn: sqlite3.Connection,
+) -> None:
+    """La ficha ancla el cambio a un personaje, no a un hecho.
+
+    Tratar el id del personaje como id de hecho no encuentra nada en `hecho_capitulo` y
+    responde «no se regenera nada» a cualquier cambio de nombre. Los capitulos salen de
+    los hechos cuyo sujeto es el personaje, que siguen siendo usos declarados.
+    """
+    _dos_capitulos(conn)
+    conn.executemany(
+        "INSERT INTO hecho (id, sujeto_id, predicado, objeto, valido_desde) "
+        "VALUES (?, 'per-1', ?, ?, 'ev-1')",
+        [("he-irene-perro", "posee", "un perro"), ("he-irene-casa", "ubicacion", "el puerto")],
+    )
+    usos = UsoDeHechos(conn)
+    usos.registrar("he-irene-perro", "cap-2")
+    usos.registrar("he-irene-casa", "cap-1")
+    usos.registrar("he-irene-casa", "cap-2")
+
+    afectados = capitulos_afectados(
+        CambioDelLector(entidad_id="per-1", descripcion="se llama Lucia"),
+        usos=usos,
+    )
+
+    assert afectados == ("cap-1", "cap-2")
+
+
+@pytest.mark.invariants
+def test_un_personaje_sin_hechos_usados_no_regenera_nada(
+    conn: sqlite3.Connection,
+) -> None:
+    _dos_capitulos(conn)
+
+    afectados = capitulos_afectados(
+        CambioDelLector(entidad_id="pe-nadie", descripcion="nada"),
+        usos=UsoDeHechos(conn),
+    )
+
+    assert afectados == ()
+
+
+@pytest.mark.invariants
 def test_la_primera_version_no_tiene_anterior_y_las_demas_si(
     conn: sqlite3.Connection,
 ) -> None:

@@ -20,22 +20,27 @@ from backend.store.repositories import UsoDeHechos, VersionesDeNovela
 
 @dataclass(frozen=True)
 class CambioDelLector:
-    """Lo que el lector pide cambiar, anclado a un hecho del canon.
+    """Lo que el lector pide cambiar, anclado a un hecho del canon o a una entidad.
 
-    Va anclado a un `Hecho` y no a un fragmento de texto a proposito: un fragmento solo
-    sabe de un capitulo, y el mismo hecho puede estar sosteniendo otros cinco.
+    Va anclado al canon y no a un fragmento de texto a proposito: un fragmento solo sabe
+    de un capitulo, y el mismo hecho puede estar sosteniendo otros cinco. El ancla a una
+    entidad existe porque un cambio de nombre no es un `Hecho`: afecta a todo capitulo que
+    use un hecho de ese personaje. Se usa una de las dos, nunca ambas.
     """
 
-    hecho_id: str
     descripcion: str
+    hecho_id: str = ""
+    entidad_id: str = ""
 
 
 def capitulos_afectados(cambio: CambioDelLector, *, usos: UsoDeHechos) -> tuple[str, ...]:
     """Los capitulos que hay que regenerar, ni uno mas.
 
-    Si el hecho no consta usado en ningun capitulo, la respuesta es vacio y no «toda la
+    Si el ancla no consta usada en ningun capitulo, la respuesta es vacio y no «toda la
     novela»: lo primero se puede investigar, lo segundo cuesta una novela entera.
     """
+    if cambio.entidad_id:
+        return usos.capitulos_de_sujeto(cambio.entidad_id)
     return usos.capitulos_de(cambio.hecho_id)
 
 

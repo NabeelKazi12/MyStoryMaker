@@ -62,6 +62,8 @@ Atributos: `id`, `nombre_canónico`, `alias[]`, `primera_aparición` (D: escena)
 
 El `estatus_ontológico` importa: permite que el sistema maneje información falsa dentro de la ficción sin corromper el canon.
 
+El `nombre_canónico` de un `Personaje` cambia por petición del lector, nunca en sitio sin revisión: el cambio abre una revisión de canon con eventos `renombrar` (anterior y nuevo) y se sustituye como palabra completa en el canon, el esqueleto, los resúmenes y la prosa de su novela, con un `Borrador` nuevo por escena tocada y el anterior conservado (D-26, SPEC-013). El del destinatario no cambia por esta vía.
+
 Subclases: `Personaje`, `Lugar`, `Objeto`, `Organización`, `Lore`.
 
 ### Personaje

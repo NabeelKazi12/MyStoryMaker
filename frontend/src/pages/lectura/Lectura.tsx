@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   actualizarPortada,
   aprobarNovela,
+  cambiarNombre,
   eliminarNovela,
   ErrorDeLectura,
   escribirNovela,
@@ -104,8 +105,14 @@ export function Lectura({
   const [enDedicatoria, setEnDedicatoria] = useState(false);
   const [panel, setPanel] = useState<NombreDePanel | null>(null);
   const [menuAbierto, setMenuAbierto] = useState(false);
-  const [cambio, setCambio] = useState<{ id: string; nombre: string } | null>(null);
+  const [cambio, setCambio] = useState<{
+    id: string;
+    nombre: string;
+    esDestinatario: boolean;
+  } | null>(null);
   const [descripcion, setDescripcion] = useState("");
+  // El nombre nuevo va aparte del texto libre: se cambia en toda la novela (SPEC-013).
+  const [nuevoNombre, setNuevoNombre] = useState("");
   const [pestanaFicha, setPestanaFicha] = useState<"personajes" | "lugares">("personajes");
   const [leido, setLeido] = useState(0);
   // Sube con cada «Reintentar» y vuelve a lanzar la lectura inicial.
@@ -358,21 +365,50 @@ export function Lectura({
   }
 
   async function enviarCambio() {
-    if (!cambio || !descripcion.trim()) return;
-    const hechoId = cambio.id;
+    if (!cambio || (!descripcion.trim() && !nuevoNombre.trim())) return;
+    const { id: entidadId, nombre } = cambio;
     setCambio(null);
-    try {
-      const respuesta = await pedirCambio(volumenId, hechoId, descripcion);
-      const afectados = respuesta.capitulos_afectados;
-      anadir(
-        afectados.length === 0
-          ? "Ese hecho no consta usado en ningún capítulo, así que no se regenera nada."
-          : `Se regenerarán ${afectados.length} capítulo(s): ${afectados.join(", ")}.`,
-      );
-    } catch (error) {
-      anadir(error instanceof ErrorDeLectura ? error.message : String(error));
+    if (nuevoNombre.trim()) {
+      try {
+        const hecho = await cambiarNombre(volumenId, entidadId, nuevoNombre);
+        anadir(
+          hecho.capitulos.length === 0
+            ? `${hecho.anterior} pasa a llamarse ${hecho.nuevo}. No aparecía en la prosa escrita; el cambio queda en la ficha y en lo que se escriba.`
+            : `${hecho.anterior} pasa a llamarse ${hecho.nuevo} en ${hecho.capitulos.length} capítulo(s): ${hecho.capitulos.map((c) => c.orden).join(", ")}.`,
+        );
+        // Ficha, índice, versiones y texto se vuelven a pedir: el nombre está en todos.
+        setIntento((n) => n + 1);
+        await refrescar();
+      } catch (error) {
+        anadir(
+          error instanceof ErrorDeLectura
+            ? `No se ha cambiado el nombre: ${String(error.detalle ?? error.message)}`
+            : String(error),
+        );
+      }
+    }
+    if (descripcion.trim()) {
+      try {
+        const respuesta = await pedirCambio(volumenId, { entidad_id: entidadId }, descripcion);
+        const afectados = respuesta.capitulos_afectados;
+        anadir(
+          afectados.length === 0
+            ? `${nombre} no consta en ningún capítulo escrito.`
+            : `El cambio afectaría a ${afectados.length} capítulo(s): ${ordenesDe(afectados).join(", ")}.`,
+        );
+      } catch (error) {
+        anadir(error instanceof ErrorDeLectura ? error.message : String(error));
+      }
     }
     setDescripcion("");
+    setNuevoNombre("");
+  }
+
+  /** El número de capítulo que ve quien lee, no el id interno. */
+  function ordenesDe(ids: string[]) {
+    const indice =
+      estado.fase === "lista" ? new Map(estado.datos.capitulos.map((c) => [c.id, c.orden])) : new Map();
+    return ids.map((id) => indice.get(id) ?? id).sort((a, b) => Number(a) - Number(b));
   }
 
   if (estado.fase === "cargando")
@@ -709,7 +745,13 @@ export function Lectura({
                         className="enlace"
                         disabled={aprobacion !== null}
                         title={aprobacion ? BLOQUEADA_POR_APROBACION : undefined}
-                        onClick={() => setCambio({ id: entidad.id, nombre: entidad.nombre_canonico })}
+                        onClick={() =>
+                          setCambio({
+                            id: entidad.id,
+                            nombre: entidad.nombre_canonico,
+                            esDestinatario: entidad.es_destinatario === true,
+                          })
+                        }
                       >
                         Pedir un cambio
                       </button>
@@ -760,16 +802,32 @@ export function Lectura({
             void enviarCambio();
           }}
         >
+          {cambio?.esDestinatario ? (
+            <p className="nota-bloqueo">
+              Es la persona a quien va dedicada la novela: su nombre viene del encargo y no se cambia desde aquí.
+            </p>
+          ) : (
+            <label className="campo">
+              <span>Nuevo nombre</span>
+              <input value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)} autoFocus />
+              <small>Se cambia en toda la novela: ficha, capítulos escritos y lo que se escriba después.</small>
+            </label>
+          )}
           <label className="campo">
-            <span>¿Qué hay que cambiar?</span>
-            <textarea rows={4} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} autoFocus />
-            <small>Se regeneran solo los capítulos en los que se usa este hecho.</small>
+            <span>¿Qué más hay que cambiar?</span>
+            <textarea
+              rows={4}
+              value={descripcion}
+              onChange={(e) => setDescripcion(e.target.value)}
+              autoFocus={cambio?.esDestinatario === true}
+            />
+            <small>Se dice en qué capítulos aparece este personaje.</small>
           </label>
           <div className="dialogo-acciones">
             <button type="button" className="boton fantasma" onClick={() => setCambio(null)}>
               Cancelar
             </button>
-            <button type="submit" className="boton principal" disabled={!descripcion.trim()}>
+            <button type="submit" className="boton principal" disabled={!descripcion.trim() && !nuevoNombre.trim()}>
               Pedir el cambio
             </button>
           </div>

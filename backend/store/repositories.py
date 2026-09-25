@@ -14,6 +14,7 @@ RF-BIB-05.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass
 
@@ -168,6 +169,17 @@ class CanonVersionado:
             (revision, hecho_id, valido_hasta),
         )
 
+    def registrar_renombrado(
+        self, revision: int, tabla: str, fila_id: str, anterior: str, nuevo: str
+    ) -> int:
+        """Deja constancia de un cambio de nombre en esa revision (SPEC-013 RF-NOM-12)."""
+        self.conn.execute(
+            "INSERT INTO canon_cambio (revision, tabla, fila_id, operacion, datos) "
+            "VALUES (?, ?, ?, 'renombrar', ?)",
+            (revision, tabla, fila_id, json.dumps({"antes": anterior, "despues": nuevo})),
+        )
+        return revision
+
     def hechos_vigentes_en(self, revision: int) -> frozenset[str]:
         """Que hechos estaban vigentes en la revision N.
 
@@ -188,7 +200,8 @@ class CanonVersionado:
         for fila in filas:
             if fila["operacion"] == "insertar":
                 vigentes.add(fila["fila_id"])
-            else:
+            elif fila["operacion"] == "cerrar_intervalo":
+                # `renombrar` cambia el texto del hecho, no su vigencia.
                 vigentes.discard(fila["fila_id"])
         return frozenset(vigentes)
 
@@ -459,6 +472,20 @@ class UsoDeHechos:
         filas = self.conn.execute(
             "SELECT capitulo_id FROM hecho_capitulo WHERE hecho_id = ? ORDER BY capitulo_id",
             (hecho_id,),
+        ).fetchall()
+        return tuple(fila["capitulo_id"] for fila in filas)
+
+    def capitulos_de_sujeto(self, entidad_id: str) -> tuple[str, ...]:
+        """Los capitulos que usan algun hecho cuyo sujeto es esa entidad.
+
+        Sigue siendo el registro declarado: no se busca el nombre en la prosa, se siguen
+        los hechos de la entidad hasta los capitulos que los canonizaron.
+        """
+        filas = self.conn.execute(
+            "SELECT DISTINCT hc.capitulo_id FROM hecho_capitulo hc "
+            "JOIN hecho h ON h.id = hc.hecho_id "
+            "WHERE h.sujeto_id = ? ORDER BY hc.capitulo_id",
+            (entidad_id,),
         ).fetchall()
         return tuple(fila["capitulo_id"] for fila in filas)
 

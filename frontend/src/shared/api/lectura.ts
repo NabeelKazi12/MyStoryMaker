@@ -9,6 +9,8 @@ export interface CapituloDeIndice {
 export interface EntidadDeFicha {
   id: string;
   nombre_canonico: string;
+  /** Solo en personajes: si es la persona destinataria lo dice el backend (SPEC-013). */
+  es_destinatario?: boolean;
 }
 
 export interface Lectura {
@@ -166,10 +168,30 @@ export const leerVersiones = (volumenId: string) =>
 export const leerCapitulosDeVersion = (versionId: string) =>
   pedir<CapituloDeVersion[]>(`/versiones/${versionId}/capitulos`);
 
-export const pedirCambio = (volumenId: string, hechoId: string, descripcion: string) =>
+/** El cambio se ancla a un hecho o a un personaje; la ficha ancla al personaje. */
+export type AnclaDeCambio = { hecho_id: string } | { entidad_id: string };
+
+export const pedirCambio = (volumenId: string, ancla: AnclaDeCambio, descripcion: string) =>
   pedir<{ capitulos_afectados: string[] }>(`/novelas/${volumenId}/cambios`, {
     method: "POST",
-    body: JSON.stringify({ hecho_id: hechoId, descripcion }),
+    body: JSON.stringify({ ...ancla, descripcion }),
+  });
+
+export interface NombreCambiado {
+  personaje_id: string;
+  anterior: string;
+  nuevo: string;
+  revision: number;
+  /** `null` si la prosa escrita no lo nombraba y no hizo falta versión nueva. */
+  version_id: string | null;
+  capitulos: CapituloDeIndice[];
+}
+
+/** Cambia el nombre en toda la novela (SPEC-013). Lo valida el backend: `422`/`409`. */
+export const cambiarNombre = (volumenId: string, personajeId: string, nombre: string) =>
+  pedir<NombreCambiado>(`/novelas/${volumenId}/personajes/${personajeId}/nombre`, {
+    method: "PUT",
+    body: JSON.stringify({ nombre }),
   });
 
 export const leerTexto = (volumenId: string) =>

@@ -244,6 +244,32 @@ def test_pedir_un_cambio_responde_202_y_dice_que_capitulos_toca(cliente: TestCli
     assert respuesta.json()["capitulos_afectados"] == []
 
 
+@pytest.mark.invariants
+def test_pedir_un_cambio_sobre_un_personaje_se_acepta(cliente: TestClient) -> None:
+    """La ficha de personajes ancla el cambio al personaje, no a un hecho."""
+    respuesta = cliente.post(
+        "/novelas/vol-1/cambios",
+        json={"entidad_id": "pe-marta", "descripcion": "se llama Lucia"},
+    )
+
+    assert respuesta.status_code == 202
+    assert respuesta.json()["entidad_id"] == "pe-marta"
+
+
+@pytest.mark.invariants
+def test_un_cambio_tiene_que_anclarse_a_un_hecho_o_a_un_personaje_no_a_ambos(
+    cliente: TestClient,
+) -> None:
+    ninguno = cliente.post("/novelas/vol-1/cambios", json={"descripcion": "algo"})
+    ambos = cliente.post(
+        "/novelas/vol-1/cambios",
+        json={"hecho_id": "he-perro", "entidad_id": "pe-marta", "descripcion": "algo"},
+    )
+
+    assert ninguno.status_code == 422
+    assert ambos.status_code == 422
+
+
 # --- Una base sin migrar tiene que decirlo, no devolver un 500 vacio ----------------
 
 

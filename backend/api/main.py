@@ -19,7 +19,7 @@ from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Response, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from backend.domain.vocabularies import ModoDeEscritura
 from backend.store import database
@@ -349,10 +349,23 @@ def catalogo_de_predicados(conn: Conexion) -> list[dict[str, Any]]:
 
 
 class PeticionDeCambio(BaseModel):
-    """Lo que el lector pide cambiar, anclado a un hecho del canon."""
+    """Lo que el lector pide cambiar, anclado a un hecho del canon o a un personaje.
 
-    hecho_id: str = Field(min_length=1)
+    La ficha de personajes ancla al personaje: un cambio de nombre no es un hecho.
+    """
+
+    hecho_id: str | None = Field(default=None, min_length=1)
+    entidad_id: str | None = Field(default=None, min_length=1)
     descripcion: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _un_solo_ancla(self) -> PeticionDeCambio:
+        if (self.hecho_id is None) == (self.entidad_id is None):
+            raise ValueError(
+                "PeticionDeCambio: el cambio se ancla a un hecho_id o a un entidad_id, "
+                "exactamente uno de los dos"
+            )
+        return self
 
 
 # --- SPEC-011: los personajes del encargo -------------------------------------------
@@ -404,6 +417,62 @@ def personajes_de_novela(volumen_id: str, conn: Conexion) -> PersonajesDeNovela:
     from backend.orchestrator.personajes import leer
 
     return _como_personajes(volumen_id, leer(conn, volumen_id))
+
+
+class PeticionDeNombre(BaseModel):
+    """El nombre nuevo de un personaje. Se valida en el orquestador, no aqui."""
+
+    nombre: str
+
+
+class CapituloRenombrado(BaseModel):
+    id: str
+    orden: int
+
+
+class NombreCambiado(BaseModel):
+    """Lo que hizo el cambio de nombre: la lectura lo cuenta y se recarga."""
+
+    personaje_id: str
+    anterior: str
+    nuevo: str
+    revision: int
+    version_id: str | None
+    capitulos: list[CapituloRenombrado]
+
+
+@app.put(
+    "/novelas/{volumen_id}/personajes/{personaje_id}/nombre",
+    dependencies=NOVELA_VIVA,
+    operation_id="updateNombreDePersonaje",
+)
+def cambiar_nombre_de_personaje(
+    volumen_id: str, personaje_id: str, peticion: PeticionDeNombre, conn: Conexion
+) -> NombreCambiado:
+    """SPEC-013: cambia el nombre en toda la novela. Sin modelo, y por eso sincrono."""
+    from backend.orchestrator.renombrar import (
+        NombreInvalido,
+        PersonajeAjeno,
+        RenombradoCerrado,
+        renombrar,
+    )
+
+    try:
+        hecho = renombrar(conn, volumen_id, personaje_id, peticion.nombre)
+    except NombreInvalido as invalido:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(invalido)) from None
+    except PersonajeAjeno as ajeno:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(ajeno)) from None
+    except RenombradoCerrado as cerrado:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(cerrado)) from None
+    return NombreCambiado(
+        personaje_id=hecho.personaje_id,
+        anterior=hecho.anterior,
+        nuevo=hecho.nuevo,
+        revision=hecho.revision,
+        version_id=hecho.version_id,
+        capitulos=[CapituloRenombrado(id=c.id, orden=c.orden) for c in hecho.capitulos],
+    )
 
 
 @app.put(
@@ -657,13 +726,27 @@ def lectura_de_novela(volumen_id: str, conn: Conexion) -> dict[str, Any]:
         (volumen_id,),
     ).fetchone()
 
+    # SPEC-013 RF-LEC-29: quien es la destinataria lo dice el backend, con la misma
+    # comparacion que usa para negarle el cambio de nombre; el frontend no lo deduce.
+    from backend.domain.spec.encargo import clave_de_nombre
+
+    clave_destinataria = (
+        None if destinatario is None else clave_de_nombre(destinatario["nombre"])
+    )
+
     return {
         "volumen_id": volumen["id"],
         "titulo": volumen["titulo"],
         "dedicatoria": "" if destinatario is None else destinatario["dedicatoria"],
         "destinatario": "" if destinatario is None else destinatario["nombre"],
         "capitulos": [dict(f) for f in capitulos],
-        "personajes": [dict(f) for f in personajes],
+        "personajes": [
+            {
+                **dict(f),
+                "es_destinatario": clave_de_nombre(f["nombre_canonico"]) == clave_destinataria,
+            }
+            for f in personajes
+        ],
         "lugares": [dict(f) for f in lugares],
         "aprobacion": _aprobacion_vigente(conn, volumen_id),
     }
@@ -709,12 +792,17 @@ def pedir_cambio(volumen_id: str, peticion: PeticionDeCambio, conn: Conexion) ->
 
     _exigir_novela_abierta(conn, volumen_id)
     afectados = capitulos_afectados(
-        CambioDelLector(hecho_id=peticion.hecho_id, descripcion=peticion.descripcion),
+        CambioDelLector(
+            descripcion=peticion.descripcion,
+            hecho_id=peticion.hecho_id or "",
+            entidad_id=peticion.entidad_id or "",
+        ),
         usos=UsoDeHechos(conn),
     )
     return {
         "volumen_id": volumen_id,
         "hecho_id": peticion.hecho_id,
+        "entidad_id": peticion.entidad_id,
         "capitulos_afectados": list(afectados),
         "estado": "aceptado",
     }
